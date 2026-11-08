@@ -46,6 +46,8 @@ import {
 } from "./companyHub.logic";
 import { CompanyInboxSection } from "./CompanyInboxSection";
 import { CompanyOutboxSection } from "./CompanyOutboxSection";
+import { CompanyRoutinesSection } from "./CompanyRoutinesSection";
+import { CompanyTeamSection } from "./CompanyTeamSection";
 import { useStartWorkThread } from "./useStartWorkThread";
 
 const LANE_THREAD_LIMIT = 8;
@@ -85,6 +87,10 @@ export function CompanyHub({ group }: { group: SidebarProjectSnapshot }) {
           ))}
         </div>
       </section>
+      {canReadChannels ? (
+        <CompanyTeamSection environmentId={primary.environmentId} projectId={primary.id} />
+      ) : null}
+      <CompanyRoutinesSection environmentId={primary.environmentId} projectId={primary.id} />
       <AgentLanes
         group={group}
         environmentId={primary.environmentId}

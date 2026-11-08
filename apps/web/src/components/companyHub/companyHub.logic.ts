@@ -44,7 +44,7 @@ export function groupThreadsByAgent<T extends { readonly updatedAt: string }>(
     );
 }
 
-const BRIDGE_AGENTS = [
+export const BRIDGE_AGENTS = [
   { instanceId: "museBot", displayName: "Muse" },
   { instanceId: "grokBot", displayName: "Grok Bot" },
 ] as const;
@@ -57,6 +57,7 @@ export type WorkTaskTarget =
 
 const MUSE: WorkTaskTarget = { kind: "bridge", agent: BRIDGE_AGENTS[0] };
 const GROK_BOT: WorkTaskTarget = { kind: "bridge", agent: BRIDGE_AGENTS[1] };
+const CLAUDE: WorkTaskTarget = { kind: "coding", provider: "claude" };
 
 export interface WorkTaskPreset {
   readonly id: string;
@@ -106,6 +107,54 @@ export const WORK_TASK_PRESETS: ReadonlyArray<WorkTaskPreset> = [
     target: MUSE,
     prompt:
       "Look at where we are and propose the three growth experiments with the best expected return this month. For each, give the hypothesis, the channel, and the first concrete step.",
+  },
+  {
+    id: "investor-update",
+    label: "Investor update",
+    description: "Draft this month's update",
+    target: MUSE,
+    prompt:
+      "Draft this month's investor update from the numbers, wins, and asks in company/. Save it as company/updates/<month>.md, keep it under one page, and do not send it until I approve.",
+  },
+  {
+    id: "hiring",
+    label: "Hiring",
+    description: "Move candidates forward",
+    target: MUSE,
+    prompt:
+      "Review the hiring collection. Tell me who is waiting on us, draft the next message for each candidate, and flag anyone who needs a decision from me.",
+  },
+  {
+    id: "metrics",
+    label: "Metrics",
+    description: "Write this week's numbers",
+    target: MUSE,
+    prompt:
+      "Pull this week's revenue, signups, and runway from Stripe and our analytics through the browser, then write company/METRICS.md with the numbers, the trend, and what changed since last week.",
+  },
+  {
+    id: "books",
+    label: "Books",
+    description: "Check what we owe and paid",
+    target: CLAUDE,
+    prompt:
+      "Review invoices, subscriptions, and payments from the last month. List anything unusual, unpaid, or renewing, and save the vendors and amounts in the brain.",
+  },
+  {
+    id: "admin",
+    label: "Admin",
+    description: "Contracts, filings, deadlines",
+    target: CLAUDE,
+    prompt:
+      "Check contracts, filings, and renewals due in the next 60 days. Give me the list with dates, what happens if we miss each one, and what you need from me.",
+  },
+  {
+    id: "design",
+    label: "Design",
+    description: "Make a page, deck, or graphic",
+    target: CLAUDE,
+    prompt:
+      "Make the next design piece we need, following company/DESIGN.md and the design skills on this machine. Show me two directions before you finish one.",
   },
   {
     id: "code",

@@ -47,6 +47,24 @@ record's `## Log`. Edits keep the comments and field order you wrote. A
 collection's `README.md` sets its name, its stages (`stages: [lead, won]`), and
 a description agents read.
 
+## Your team
+
+Hire AI employees from **Hire** under **Team** in Settings → Company. Each one is
+a record in `company/agents/` with a role, the provider it runs on (Muse, Grok
+Bot, Claude, or Codex), the collections and channels it works with, and its
+instructions. **Ask for work** starts a thread as that employee, with its
+instructions and the company brain. Change how someone works by editing their
+record under **Company brain → Team**.
+
+## Routines
+
+**Add routine** under **Routines** creates a scheduled task for work that repeats:
+morning triage, weekly pipeline follow-ups, weekly metrics, an investor update,
+social posts, and a Monday plan. A routine runs on this machine on its schedule,
+starts a thread in the company, and shows up with every other task under
+**Settings → Scheduled tasks**, where you can edit its prompt and schedule.
+Pause a routine with its switch, or run it now with the play button.
+
 ## Drafts and sending
 
 Drafts are Markdown files in the company folder's `company/outbox/`, one per
