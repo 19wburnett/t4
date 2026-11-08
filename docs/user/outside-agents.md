@@ -141,7 +141,7 @@ reads before it starts. Add instructions before you send it.
 
 Each task carries its `projectId`. With it, a bot can read the company's inbox
 with `t3_company_inbox` and `t3_company_message`, and draft replies and posts
-with `t3_company_draft`; you send them from the Company hub. See
+with `t3_company_draft`; you send them from Settings → Company. See
 [Company channels](./company-channels.md).
 
 Open tasks survive a restart of the environment: each one reopens in its
