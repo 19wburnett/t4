@@ -1,7 +1,6 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import {
   AuthFilesystemReadScope,
-  AuthFilesystemWriteScope,
   type CompanyDraft,
   type ProjectId,
   type ProviderDriverKind,
@@ -9,14 +8,13 @@ import {
 import { useAtomValue } from "@effect/atom-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
-import { BookOpenIcon, DownloadIcon, PlusIcon, Settings2Icon } from "lucide-react";
-import { useId, useState } from "react";
+import { BookOpenIcon, PlusIcon, Settings2Icon } from "lucide-react";
+import { type ReactNode, useEffect, useState } from "react";
 
 import { isElectron } from "~/env";
 import { useProviderEntryByEnvironmentAndInstanceId } from "~/hooks/useProviderEntryByEnvironmentAndInstanceId";
 import { cn } from "~/lib/utils";
 import { isProviderInstancePickerReady } from "~/providerInstances";
-import { appAtomRegistry } from "~/rpc/atomRegistry";
 import { companyChannelEnvironment } from "~/state/companyChannels";
 import { useThreadShells } from "~/state/entities";
 import { environmentPresentations } from "~/state/presentation";
@@ -26,13 +24,10 @@ import { formatRelativeTimeLabel } from "~/timestampFormat";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import ChatMarkdown from "../ChatMarkdown";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
-import { getProjectFileQueryAtom } from "../files/projectFilesQueryState";
 import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { ThreadRowLeadingStatus } from "../ThreadStatusIndicators";
 import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../ui/empty";
-import { Input } from "../ui/input";
-import { toastManager } from "../ui/toast";
 import { SidebarInset } from "../ui/sidebar";
 import {
   WorkspaceBreadcrumb,
@@ -43,28 +38,22 @@ import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { channelFailure } from "./companyChannels.logic";
 import { CompanyBrainRecordsSection } from "./CompanyBrainRecordsSection";
-import { CompanyBrainSourceBar, useConnectBrainRepo } from "./CompanyBrainSourceBar";
-import { CompanyChannelsSection } from "./CompanyChannelsSection";
+import { CompanyBrainSourceBar } from "./CompanyBrainSourceBar";
+import { companyProjectOf, useCompanyBrainFile } from "./CompanySetup";
+import { rememberLastCompany } from "./lastCompany";
 import {
   AGENT_BRIDGE_DRIVER,
-  type BrainSource,
-  brainSourceLabel,
   type BridgeAgent,
-  buildBrainImportPrompt,
   buildWorkTaskPrompt,
-  COMPANY_BRAIN_TEMPLATES,
   COMPANY_DIR,
   connectedBridgeAgents,
   groupThreadsByAgent,
-  isStarterBrain,
-  parseBrainSource,
   type WorkTaskTarget,
   WORK_TASK_PRESETS,
 } from "./companyHub.logic";
 import { CompanyInboxSection } from "./CompanyInboxSection";
 import { CompanyOutboxSection } from "./CompanyOutboxSection";
 import { useStartWorkThread } from "./useStartWorkThread";
-import { useWriteCompanyBrain } from "./useWriteCompanyBrain";
 
 const LANE_THREAD_LIMIT = 8;
 
@@ -84,12 +73,10 @@ export function CompanyHubPage({ projectKey }: { projectKey: string }) {
           <Button
             size="sm"
             variant="ghost"
-            render={
-              <Link to="/settings/projects" search={{ project: projectKey, machine: undefined }} />
-            }
+            render={<CompanySettingsLink projectKey={projectKey} />}
           >
             <Settings2Icon aria-hidden />
-            Project settings
+            Company settings
           </Button>
         </div>
       </WorkspacePageHeader>
@@ -112,16 +99,11 @@ export function CompanyHubPage({ projectKey }: { projectKey: string }) {
 }
 
 function CompanyHubBody({ group }: { group: SidebarProjectSnapshot }) {
-  // New threads and the company brain use the group's first member, like the sidebar's new-thread button.
-  const primary = group.memberProjects[0] ?? group;
-  const brainAtom = getProjectFileQueryAtom(
-    primary.environmentId,
-    primary.workspaceRoot,
-    COMPANY_BRAIN_TEMPLATES[0]!.relativePath,
-  );
-  const brainResult = useAtomValue(brainAtom);
-  const brain = AsyncResult.getOrElse(brainResult, () => null);
-  const hasCompanyBrain = brain !== null && brain.exists !== false;
+  // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records the visit in localStorage for the sidebar's Company button
+  useEffect(() => rememberLastCompany(group.projectKey), [group.projectKey]);
+  const primary = companyProjectOf(group);
+  const brain = useCompanyBrainFile(primary);
+  const hasCompanyBrain = brain.contents !== null;
 
   const canReadChannels = useEnvironmentScope(primary.environmentId, AuthFilesystemReadScope);
   const startWorkThread = useStartWorkThread();
@@ -159,18 +141,18 @@ function CompanyHubBody({ group }: { group: SidebarProjectSnapshot }) {
         <CompanyChannelSections
           environmentId={primary.environmentId}
           projectId={primary.id}
+          projectKey={group.projectKey}
           onAskAgent={(agent, prompt) => void startThread(prompt, { kind: "bridge", agent })}
         />
       ) : null}
       <CompanyBrain
         environmentId={primary.environmentId}
         projectId={primary.id}
+        projectKey={group.projectKey}
         canReadRecords={canReadChannels}
         workspaceRoot={primary.workspaceRoot}
-        brainLoading={brainResult._tag === "Initial"}
-        brainContents={hasCompanyBrain ? brain.contents : null}
-        onCreated={() => appAtomRegistry.refresh(brainAtom)}
-        onImport={(prompt) => void startThread(prompt, { kind: "coding", provider: "claude" })}
+        brainLoading={brain.loading}
+        brainContents={brain.contents}
       />
     </WorkspacePageContainer>
   );
@@ -179,6 +161,7 @@ function CompanyHubBody({ group }: { group: SidebarProjectSnapshot }) {
 function CompanyChannelSections(props: {
   readonly environmentId: SidebarProjectSnapshot["environmentId"];
   readonly projectId: ProjectId;
+  readonly projectKey: string;
   readonly onAskAgent: (agent: BridgeAgent, prompt: string) => void;
 }) {
   const target = { environmentId: props.environmentId, input: { projectId: props.projectId } };
@@ -194,6 +177,18 @@ function CompanyChannelSections(props: {
 
   return (
     <>
+      {accountsResult._tag === "Success" && accounts.length === 0 ? (
+        <p className="text-sm text-muted-foreground">
+          Connect an email inbox or an X, LinkedIn, or Threads account in{" "}
+          <CompanySettingsLink
+            projectKey={props.projectKey}
+            className="underline underline-offset-2 hover:text-foreground"
+          >
+            Company settings
+          </CompanySettingsLink>
+          . Agents draft into the outbox; only you send.
+        </p>
+      ) : null}
       <CompanyInboxSection
         environmentId={props.environmentId}
         projectId={props.projectId}
@@ -210,13 +205,6 @@ function CompanyChannelSections(props: {
         error={failureOf(outboxResult)}
         editing={editingDraft}
         onEdit={setEditingDraft}
-      />
-      <CompanyChannelsSection
-        environmentId={props.environmentId}
-        projectId={props.projectId}
-        accounts={accounts}
-        loading={accountsResult._tag === "Initial"}
-        error={failureOf(accountsResult)}
       />
     </>
   );
@@ -385,58 +373,12 @@ function AgentLanes({
 function CompanyBrain(props: {
   environmentId: SidebarProjectSnapshot["environmentId"];
   projectId: ProjectId;
+  projectKey: string;
   canReadRecords: boolean;
   workspaceRoot: string;
   brainLoading: boolean;
   brainContents: string | null;
-  onCreated: () => void;
-  onImport: (prompt: string) => void;
 }) {
-  const canWriteFiles = useEnvironmentScope(props.environmentId, AuthFilesystemWriteScope);
-  const writeCompanyBrain = useWriteCompanyBrain();
-  const [creating, setCreating] = useState(false);
-
-  const createBrain = async (): Promise<boolean> => {
-    setCreating(true);
-    const written = await writeCompanyBrain({
-      environmentId: props.environmentId,
-      workspaceRoot: props.workspaceRoot,
-    });
-    setCreating(false);
-    if (written) props.onCreated();
-    return written;
-  };
-
-  const connectRepo = useConnectBrainRepo();
-  // A GitHub brain stays where it is and syncs; other sources are read once by an agent.
-  const importBrain = async (source: BrainSource) => {
-    if (source.kind === "github") {
-      setCreating(true);
-      const failure = await connectRepo(
-        { environmentId: props.environmentId, projectId: props.projectId },
-        source.repository,
-      );
-      setCreating(false);
-      if (failure !== null) {
-        toastManager.add({
-          type: "error",
-          title: "Could not connect the repo",
-          description: failure,
-        });
-      }
-      props.onCreated();
-      return;
-    }
-    // The agent fills the starter headings, so a missing brain gets them first.
-    if (props.brainContents === null && !(await createBrain())) return;
-    props.onImport(buildBrainImportPrompt(source));
-  };
-
-  const importForm =
-    props.brainContents === null || isStarterBrain(props.brainContents) ? (
-      <ImportBrainForm disabled={!canWriteFiles || creating} onImport={importBrain} />
-    ) : null;
-
   return (
     <section aria-labelledby="company-hub-brain" className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
@@ -460,21 +402,18 @@ function CompanyBrain(props: {
         />
       ) : null}
       {props.brainLoading ? null : props.brainContents !== null ? (
-        <>
-          {importForm}
-          <div
-            className={cn(
-              "rounded-xl border border-border/60 bg-card px-4 py-3",
-              props.brainContents.trim().length === 0 && "text-muted-foreground",
-            )}
-          >
-            <ChatMarkdown
-              text={props.brainContents}
-              cwd={props.workspaceRoot}
-              environmentId={props.environmentId}
-            />
-          </div>
-        </>
+        <div
+          className={cn(
+            "rounded-xl border border-border/60 bg-card px-4 py-3",
+            props.brainContents.trim().length === 0 && "text-muted-foreground",
+          )}
+        >
+          <ChatMarkdown
+            text={props.brainContents}
+            cwd={props.workspaceRoot}
+            environmentId={props.environmentId}
+          />
+        </div>
       ) : (
         <div className="rounded-xl border border-dashed border-border/70">
           <Empty>
@@ -486,67 +425,29 @@ function CompanyBrain(props: {
                 Every agent reads it before it starts work.
               </EmptyDescription>
             </EmptyHeader>
-            <Button
-              size="sm"
-              disabled={!canWriteFiles || creating}
-              onClick={() => void createBrain()}
-            >
-              Create company brain
+            <Button size="sm" render={<CompanySettingsLink projectKey={props.projectKey} />}>
+              Set up in Settings
             </Button>
           </Empty>
-          {importForm}
         </div>
       )}
     </section>
   );
 }
 
-function ImportBrainForm(props: {
-  disabled: boolean;
-  onImport: (source: BrainSource) => Promise<void>;
+function CompanySettingsLink({
+  projectKey,
+  ...props
+}: {
+  readonly projectKey: string;
+  readonly className?: string;
+  readonly children?: ReactNode;
 }) {
-  const id = useId();
-  const [value, setValue] = useState("");
-  const source = parseBrainSource(value);
-  const invalid = value.trim().length > 0 && source === null;
-
   return (
-    <form
-      className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card px-4 py-3"
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (source) void props.onImport(source);
-      }}
-    >
-      <label htmlFor={id} className="text-sm font-medium">
-        Already have a company brain?
-      </label>
-      <div className="flex gap-2">
-        <Input
-          id={id}
-          className="min-w-0 flex-1"
-          size="sm"
-          placeholder="acme.com, github.com/acme/brain, or a Supabase project URL"
-          value={value}
-          onChange={(event) => setValue(event.target.value)}
-          spellCheck={false}
-          autoComplete="off"
-          aria-invalid={invalid}
-        />
-        <Button type="submit" size="sm" disabled={props.disabled || source === null}>
-          <DownloadIcon aria-hidden />
-          Import
-        </Button>
-      </div>
-      <p className={cn("text-xs", invalid ? "text-destructive" : "text-muted-foreground")}>
-        {invalid
-          ? "Paste a website, a GitHub repo, or a Supabase project URL."
-          : source
-            ? source.kind === "github"
-              ? `T4 clones ${source.repository} as ${COMPANY_DIR}/ and keeps it in sync.`
-              : `Claude reads the ${brainSourceLabel(source)} and fills in ${COMPANY_DIR}/. You review the prompt before it starts.`
-            : `Claude reads it and fills in ${COMPANY_DIR}/ for every agent here.`}
-      </p>
-    </form>
+    <Link
+      {...props}
+      to="/settings/company"
+      search={{ project: projectKey, machine: undefined, checkout: undefined }}
+    />
   );
 }

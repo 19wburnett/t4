@@ -1,6 +1,7 @@
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  BuildingIcon,
   ChartNoAxesColumnIcon,
   InboxIcon,
   SettingsIcon,
@@ -37,7 +38,9 @@ import {
   useSidebar,
 } from "../ui/sidebar";
 import { Tooltip, TooltipPopup, TooltipTrigger } from "../ui/tooltip";
+import { readLastCompany } from "../companyHub/lastCompany";
 import { readPullRequestListPreferences } from "../pullRequest/pullRequestListPreferences";
+import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { isSidebarUtilityPage, useNavigateToMainApp } from "./mainAppLocation";
 import { SidebarThreadUndoNotice } from "./SidebarThreadUndoNotice";
 import { SidebarProviderUpdatePill } from "./SidebarProviderUpdatePill";
@@ -228,6 +231,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     select: (location) => isSidebarUtilityPage(location.pathname),
   });
   const pullRequestsSupported = usePullRequestsSupported();
+  const projectGroups = useSettingsProjectGroups();
   const closeMobileSidebar = () => {
     if (isMobile) {
       setOpenMobile(false);
@@ -239,6 +243,16 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
       to: "/pull-requests",
       search: readPullRequestListPreferences(),
     });
+  };
+  const handleCompanyClick = () => {
+    closeMobileSidebar();
+    const last = readLastCompany();
+    const projectKey =
+      projectGroups.find((group) => group.projectKey === last)?.projectKey ??
+      projectGroups[0]?.projectKey;
+    void (projectKey === undefined
+      ? navigate({ to: "/settings/company" })
+      : navigate({ to: "/company/$projectKey", params: { projectKey } }));
   };
   const handleNeedsYouClick = () => {
     closeMobileSidebar();
@@ -276,6 +290,11 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
             icon={<SettingsIcon />}
             label="Settings"
             onClick={handleSettingsClick}
+          />
+          <SidebarUtilityItem
+            icon={<BuildingIcon />}
+            label="Company"
+            onClick={handleCompanyClick}
           />
           <SidebarUtilityItem
             icon={<InboxIcon />}

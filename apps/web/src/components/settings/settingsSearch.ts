@@ -16,6 +16,7 @@ import { commandLabel } from "./KeybindingsSettings.logic";
 import type { ResolvedSettingsScope } from "./settingsScope";
 
 export type SettingsPath =
+  | "/settings/company"
   | "/settings/projects"
   | "/settings/general"
   | "/settings/diagnostics"
@@ -87,6 +88,7 @@ export interface SettingsSearchAvailability {
 
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/diagnostics": "Diagnostics",
+  "/settings/company": "Company",
   "/settings/projects": "Projects",
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
@@ -125,6 +127,10 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
       "/settings/keybindings",
       "/settings/snap-shot",
     ],
+  },
+  {
+    heading: "Company",
+    paths: ["/settings/company"],
   },
   {
     heading: "Agents",
@@ -262,6 +268,20 @@ export const SETTINGS_SEARCH_ITEMS = [
     to: "/settings/threads",
     scope: "project-defaults",
     searchTerms: ["model workspace environments projects inheritance checkout"],
+  },
+  {
+    id: "company-accounts",
+    title: "Email & social accounts",
+    to: "/settings/company",
+    targetId: "company-accounts",
+    searchTerms: ["email inbox gmail outlook icloud imap smtp x twitter linkedin threads channels"],
+  },
+  {
+    id: "company-brain",
+    title: "Company brain",
+    to: "/settings/company",
+    targetId: "company-brain",
+    searchTerms: ["brain crm github repo sync supabase import records"],
   },
   {
     id: "project-overview",
@@ -1187,6 +1207,7 @@ const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id,
 
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
   "/settings/diagnostics": "environment",
+  "/settings/company": "project",
   "/settings/projects": "project",
   "/settings/general": null,
   "/settings/appearance": null,

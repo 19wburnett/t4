@@ -1,7 +1,9 @@
 # Company channels
 
 A company can connect email accounts and X, LinkedIn, and Threads accounts in
-its Company hub. Agents read the inbox and write drafts; only you send them.
+**Settings → Company**, where you also set up its brain. Open a company's day-to-day
+work, such as its inbox, outbox, and records, with **Company** at the bottom of the
+sidebar or **Open Company hub** in those settings. Agents read the inbox and write drafts; only you send them.
 Credentials stay on the environment that runs the company and are never shown
 again after you save them. Saving an account signs in with it first, so a
 mistyped password or token is caught right away.
@@ -10,7 +12,7 @@ mistyped password or token is caught right away.
 
 Every agent reads `company/BRAIN.md` and `company/CHANNELS.md` before it works.
 If your company already keeps this somewhere else, paste it into **Already have
-a company brain?** in the Company hub. A GitHub repo (`owner/repo` works)
+a company brain?** in Settings → Company. A GitHub repo (`owner/repo` works)
 becomes `company/` itself and stays in sync, as described below. A website or a
 Supabase project URL opens a Claude thread with an import prompt to review;
 Claude reads the source and fills in `company/`. Supabase needs the Supabase MCP
@@ -18,7 +20,7 @@ server or CLI on that machine.
 
 ## Sync the brain with a repo
 
-Choose **Sync with a repo** next to **Company brain** and enter a GitHub repo or
+Choose **Sync with a repo** under **Company brain** in Settings → Company and enter a GitHub repo or
 any git clone URL. T4 clones it as `company/`. Files that were only in
 `company/` are kept; where the repo has a different version of a file, the
 repo's wins and yours is saved to a backup folder T4 names. **Sync** commits

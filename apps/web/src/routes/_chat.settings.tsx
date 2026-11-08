@@ -85,7 +85,11 @@ function SettingsScopeBoundary({ pathname, children }: { pathname: string; child
       </SettingsScopeNotice>
     );
   }
-  if (SETTINGS_DEVICE_ONLY_PATHS.has(pathname) || pathname === "/settings/projects") {
+  if (
+    SETTINGS_DEVICE_ONLY_PATHS.has(pathname) ||
+    pathname === "/settings/projects" ||
+    pathname === "/settings/company"
+  ) {
     return children;
   }
   if (scope.kind === "unavailable")
