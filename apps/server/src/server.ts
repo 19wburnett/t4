@@ -76,6 +76,7 @@ import * as RemoteDelegation from "./peer/RemoteDelegation.ts";
 import * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
 import * as PeerLinks from "./peer/PeerLinks.ts";
 import * as CompanyBrain from "./companyBrain/CompanyBrain.ts";
+import * as CompanyBrainSource from "./companyBrain/CompanyBrainSource.ts";
 import * as CompanyChannels from "./companyChannels/CompanyChannels.ts";
 import * as MailTransport from "./companyChannels/MailTransport.ts";
 import * as PeerMcpClient from "./peer/PeerMcpClient.ts";
@@ -782,6 +783,7 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.provide(CompanyChannels.layer.pipe(Layer.provide(MailTransport.layer))),
   // Company records, shared by the Company hub (WebSocket) and agents (/mcp).
   Layer.provide(CompanyBrain.layer),
+  Layer.provide(CompanyBrainSource.layer),
   Layer.provide(PreviewAutomationBroker.layer),
   Layer.provide(ServerSelfUpdate.layer.pipe(Layer.provide(layerDesktopAppUpdate))),
   Layer.provide(layerCommandReadiness),

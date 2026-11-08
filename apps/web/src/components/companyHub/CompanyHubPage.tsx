@@ -32,6 +32,7 @@ import { ThreadRowLeadingStatus } from "../ThreadStatusIndicators";
 import { Button } from "../ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../ui/empty";
 import { Input } from "../ui/input";
+import { toastManager } from "../ui/toast";
 import { SidebarInset } from "../ui/sidebar";
 import {
   WorkspaceBreadcrumb,
@@ -42,6 +43,7 @@ import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { channelFailure } from "./companyChannels.logic";
 import { CompanyBrainRecordsSection } from "./CompanyBrainRecordsSection";
+import { CompanyBrainSourceBar, useConnectBrainRepo } from "./CompanyBrainSourceBar";
 import { CompanyChannelsSection } from "./CompanyChannelsSection";
 import {
   AGENT_BRIDGE_DRIVER,
@@ -405,8 +407,27 @@ function CompanyBrain(props: {
     return written;
   };
 
-  // The agent fills the starter headings, so a missing brain gets them first.
+  const connectRepo = useConnectBrainRepo();
+  // A GitHub brain stays where it is and syncs; other sources are read once by an agent.
   const importBrain = async (source: BrainSource) => {
+    if (source.kind === "github") {
+      setCreating(true);
+      const failure = await connectRepo(
+        { environmentId: props.environmentId, projectId: props.projectId },
+        source.repository,
+      );
+      setCreating(false);
+      if (failure !== null) {
+        toastManager.add({
+          type: "error",
+          title: "Could not connect the repo",
+          description: failure,
+        });
+      }
+      props.onCreated();
+      return;
+    }
+    // The agent fills the starter headings, so a missing brain gets them first.
     if (props.brainContents === null && !(await createBrain())) return;
     props.onImport(buildBrainImportPrompt(source));
   };
@@ -423,6 +444,14 @@ function CompanyBrain(props: {
           Company brain
         </h2>
         <span className="text-xs text-muted-foreground">{COMPANY_DIR}/</span>
+        {props.canReadRecords ? (
+          <div className="ml-auto min-w-0">
+            <CompanyBrainSourceBar
+              environmentId={props.environmentId}
+              projectId={props.projectId}
+            />
+          </div>
+        ) : null}
       </div>
       {props.canReadRecords ? (
         <CompanyBrainRecordsSection
@@ -513,7 +542,9 @@ function ImportBrainForm(props: {
         {invalid
           ? "Paste a website, a GitHub repo, or a Supabase project URL."
           : source
-            ? `Claude reads the ${brainSourceLabel(source)} and fills in ${COMPANY_DIR}/. You review the prompt before it starts.`
+            ? source.kind === "github"
+              ? `T4 clones ${source.repository} as ${COMPANY_DIR}/ and keeps it in sync.`
+              : `Claude reads the ${brainSourceLabel(source)} and fills in ${COMPANY_DIR}/. You review the prompt before it starts.`
             : `Claude reads it and fills in ${COMPANY_DIR}/ for every agent here.`}
       </p>
     </form>

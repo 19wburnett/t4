@@ -87,6 +87,10 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.companyBrainSaveRecord]: AuthFilesystemWriteScope,
   [WS_METHODS.companyBrainDeleteRecord]: AuthFilesystemWriteScope,
   [WS_METHODS.companyBrainSaveCollection]: AuthFilesystemWriteScope,
+  // Connecting and syncing push to the repo with this machine's git credentials.
+  [WS_METHODS.companyBrainConnect]: AuthSourceControlWriteScope,
+  [WS_METHODS.companyBrainSync]: AuthSourceControlWriteScope,
+  [WS_METHODS.companyBrainDisconnect]: AuthSourceControlWriteScope,
   // Sending acts as the account with its saved credentials: whoever may change them.
   [WS_METHODS.companyChannelsSend]: AuthSettingsWriteScope,
 } as const;

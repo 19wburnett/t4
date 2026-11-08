@@ -95,6 +95,7 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.companyBrainListCollections]: AuthFilesystemReadScope,
   [WS_METHODS.companyBrainListRecords]: AuthFilesystemReadScope,
   [WS_METHODS.companyBrainReadRecord]: AuthFilesystemReadScope,
+  [WS_METHODS.companyBrainSourceStatus]: AuthFilesystemReadScope,
   [WS_METHODS.serverUpdateSettings]: AuthSettingsWriteScope,
   [WS_METHODS.serverSearchAcpRegistry]: AuthOrchestrationReadScope,
   [WS_METHODS.serverPrepareAcpRegistryAgent]: AuthProvidersManageScope,

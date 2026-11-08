@@ -51,6 +51,8 @@ import {
   CompanyBrainCollectionInput,
   CompanyBrainCollectionList,
   CompanyBrainCollectionSaveInput,
+  CompanyBrainConnectInput,
+  CompanyBrainConnectResult,
   CompanyBrainError,
   CompanyBrainProjectInput,
   CompanyBrainRecord,
@@ -58,6 +60,7 @@ import {
   CompanyBrainRecordInput,
   CompanyBrainRecordList,
   CompanyBrainRecordSaveInput,
+  CompanyBrainSource,
 } from "./companyBrain.ts";
 import {
   ChatGptReconnectProfileInput,
@@ -571,6 +574,10 @@ export const WS_METHODS = {
   companyBrainSaveRecord: "companyBrain.saveRecord",
   companyBrainDeleteRecord: "companyBrain.deleteRecord",
   companyBrainSaveCollection: "companyBrain.saveCollection",
+  companyBrainSourceStatus: "companyBrain.sourceStatus",
+  companyBrainConnect: "companyBrain.connect",
+  companyBrainSync: "companyBrain.sync",
+  companyBrainDisconnect: "companyBrain.disconnect",
   serverUpdateSettings: "server.updateSettings",
   serverDiscoverSourceControl: "server.discoverSourceControl",
   serverSearchAcpRegistry: "server.searchAcpRegistry",
@@ -1004,6 +1011,30 @@ const WsCompanyBrainDeleteRecordRpc = Rpc.make(WS_METHODS.companyBrainDeleteReco
 const WsCompanyBrainSaveCollectionRpc = Rpc.make(WS_METHODS.companyBrainSaveCollection, {
   payload: CompanyBrainCollectionSaveInput,
   success: CompanyBrainCollection,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainSourceStatusRpc = Rpc.make(WS_METHODS.companyBrainSourceStatus, {
+  payload: CompanyBrainProjectInput,
+  success: CompanyBrainSource,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainConnectRpc = Rpc.make(WS_METHODS.companyBrainConnect, {
+  payload: CompanyBrainConnectInput,
+  success: CompanyBrainConnectResult,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainSyncRpc = Rpc.make(WS_METHODS.companyBrainSync, {
+  payload: CompanyBrainProjectInput,
+  success: CompanyBrainSource,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainDisconnectRpc = Rpc.make(WS_METHODS.companyBrainDisconnect, {
+  payload: CompanyBrainProjectInput,
+  success: CompanyBrainSource,
   error: companyBrainErrors,
 });
 
@@ -2248,6 +2279,10 @@ export const WsRpcGroup = RpcGroup.make(
   WsCompanyBrainSaveRecordRpc,
   WsCompanyBrainDeleteRecordRpc,
   WsCompanyBrainSaveCollectionRpc,
+  WsCompanyBrainSourceStatusRpc,
+  WsCompanyBrainConnectRpc,
+  WsCompanyBrainSyncRpc,
+  WsCompanyBrainDisconnectRpc,
   WsServerDiscoverSourceControlRpc,
   WsServerSearchAcpRegistryRpc,
   WsServerPrepareAcpRegistryAgentRpc,

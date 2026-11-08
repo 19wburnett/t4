@@ -124,6 +124,38 @@ export const CompanyBrainCollectionSaveInput = Schema.Struct({
 });
 export type CompanyBrainCollectionSaveInput = typeof CompanyBrainCollectionSaveInput.Type;
 
+/** Where `company/` lives: only in this folder, or in a git repo it syncs with. */
+export const CompanyBrainSource = Schema.Union([
+  Schema.TaggedStruct("local", {}),
+  Schema.TaggedStruct("git", {
+    /** Without credentials. */
+    remoteUrl: Schema.String,
+    branch: Schema.NullOr(Schema.String),
+    /** Files changed here since the last sync. */
+    changes: Schema.Int,
+    /** Commits not pushed yet, and commits the last fetch saw upstream. */
+    ahead: Schema.Int,
+    behind: Schema.Int,
+  }),
+]);
+export type CompanyBrainSource = typeof CompanyBrainSource.Type;
+
+export const CompanyBrainConnectInput = Schema.Struct({
+  projectId: ProjectId,
+  /** `owner/repo`, a GitHub URL, or any git clone URL. */
+  repository: TrimmedNonEmptyString,
+});
+export type CompanyBrainConnectInput = typeof CompanyBrainConnectInput.Type;
+
+export const CompanyBrainConnectResult = Schema.Struct({
+  source: CompanyBrainSource,
+  /** Files only this folder had, now in the repo's folder and synced next time. */
+  kept: Schema.Int,
+  /** Where this folder's versions of files the repo also has were saved; null when none differed. */
+  backupPath: Schema.NullOr(Schema.String),
+});
+export type CompanyBrainConnectResult = typeof CompanyBrainConnectResult.Type;
+
 export const CompanyBrainFailure = Schema.Literals([
   "unknown_project",
   "unknown_collection",
@@ -131,6 +163,10 @@ export const CompanyBrainFailure = Schema.Literals([
   "invalid_input",
   "malformed",
   "storage",
+  "not_connected",
+  "already_connected",
+  "conflict",
+  "git_failed",
 ]);
 export type CompanyBrainFailure = typeof CompanyBrainFailure.Type;
 

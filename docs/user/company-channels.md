@@ -9,12 +9,23 @@ mistyped password or token is caught right away.
 ## Bring an existing company brain
 
 Every agent reads `company/BRAIN.md` and `company/CHANNELS.md` before it works.
-If your company already keeps this somewhere else, paste a website, a GitHub
-repo (`owner/repo` works), or a Supabase project URL into **Already have a
-company brain?** in the Company hub. This opens a Claude thread with the import
-prompt ready to review. Claude reads the source, fills in `company/`, and records
-where the brain came from so it can be refreshed later. Private repos need `gh`
-signed in, and Supabase needs the Supabase MCP server or CLI on that machine.
+If your company already keeps this somewhere else, paste it into **Already have
+a company brain?** in the Company hub. A GitHub repo (`owner/repo` works)
+becomes `company/` itself and stays in sync, as described below. A website or a
+Supabase project URL opens a Claude thread with an import prompt to review;
+Claude reads the source and fills in `company/`. Supabase needs the Supabase MCP
+server or CLI on that machine.
+
+## Sync the brain with a repo
+
+Choose **Sync with a repo** next to **Company brain** and enter a GitHub repo or
+any git clone URL. T4 clones it as `company/`. Files that were only in
+`company/` are kept; where the repo has a different version of a file, the
+repo's wins and yours is saved to a backup folder T4 names. **Sync** commits
+what changed here, including agents' edits, pulls, and pushes. If the same file
+changed in both places, Sync stops and lists it so you can merge it in the repo.
+Private repos need git credentials on that machine, such as `gh auth login`.
+**Stop syncing** keeps the files and leaves the repo as it is.
 
 ## Company records
 

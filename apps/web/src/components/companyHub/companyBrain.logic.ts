@@ -1,5 +1,6 @@
 import type {
   CompanyBrainCollection,
+  CompanyBrainSource,
   CompanyBrainFailure,
   CompanyBrainFields,
   CompanyBrainRecordSummary,
@@ -127,6 +128,19 @@ export function fieldChanges(original: CompanyBrainFields, rows: ReadonlyArray<F
   }
   const unset = Object.keys(original).filter((key) => !TITLE_FIELDS.has(key) && !kept.has(key));
   return { set, unset };
+}
+
+export function describeBrainSource(source: CompanyBrainSource): string {
+  if (source._tag === "local") return "Only on this machine";
+  const repo = source.remoteUrl
+    .replace(/^(https?:\/\/|ssh:\/\/)?(git@)?github\.com[:/]/, "")
+    .replace(/\.git$/, "");
+  const parts = [
+    source.changes > 0 ? `${source.changes} change${source.changes === 1 ? "" : "s"} here` : null,
+    source.ahead > 0 ? `${source.ahead} to push` : null,
+    source.behind > 0 ? `${source.behind} to pull` : null,
+  ].filter((part) => part !== null);
+  return `${repo || "Git repo"} · ${parts.length > 0 ? parts.join(" · ") : "up to date"}`;
 }
 
 export function brainFailure(cause: Cause.Cause<unknown>): {

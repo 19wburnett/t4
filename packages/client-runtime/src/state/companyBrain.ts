@@ -31,6 +31,24 @@ export function createCompanyBrainEnvironmentAtoms<R, E>(
     staleTimeMs: 5_000,
   });
 
+  const source = createEnvironmentRpcQueryAtomFamily(runtime, {
+    label: "environment-data:company-brain:source",
+    tag: WS_METHODS.companyBrainSourceStatus,
+    staleTimeMs: 10_000,
+  });
+  // Pulling can change every record, so the whole brain reloads.
+  const refreshSource = (
+    {
+      environmentId,
+      input,
+    }: { readonly environmentId: EnvironmentId; readonly input: { readonly projectId: ProjectId } },
+    registry: AtomRegistry.AtomRegistry,
+  ) =>
+    Effect.sync(() => {
+      registry.refresh(source({ environmentId, input: { projectId: input.projectId } }));
+      registry.refresh(collections({ environmentId, input: { projectId: input.projectId } }));
+    });
+
   type Target = {
     readonly environmentId: EnvironmentId;
     readonly input: {
@@ -66,6 +84,26 @@ export function createCompanyBrainEnvironmentAtoms<R, E>(
     collections,
     records,
     record,
+    source,
+    connect: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:company-brain:connect",
+      tag: WS_METHODS.companyBrainConnect,
+      onSuccess: refreshSource,
+    }),
+    sync: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:company-brain:sync",
+      tag: WS_METHODS.companyBrainSync,
+      concurrency: {
+        mode: "singleFlight",
+        key: ({ environmentId, input }) => JSON.stringify([environmentId, input.projectId]),
+      },
+      onSuccess: refreshSource,
+    }),
+    disconnect: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:company-brain:disconnect",
+      tag: WS_METHODS.companyBrainDisconnect,
+      onSuccess: refreshSource,
+    }),
     saveRecord: createEnvironmentRpcCommand(runtime, {
       label: "environment-data:company-brain:save-record",
       tag: WS_METHODS.companyBrainSaveRecord,

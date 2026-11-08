@@ -6,7 +6,13 @@ import {
 } from "@t3tools/contracts";
 import { describe, expect, it } from "vite-plus/test";
 
-import { fieldChanges, fieldRowsOf, groupByStage, NO_STAGE } from "./companyBrain.logic";
+import {
+  describeBrainSource,
+  fieldChanges,
+  fieldRowsOf,
+  groupByStage,
+  NO_STAGE,
+} from "./companyBrain.logic";
 
 const record = (id: string, fields: CompanyBrainFields): CompanyBrainRecordSummary => ({
   collection: CompanyBrainCollectionId.make("deals"),
@@ -44,5 +50,35 @@ describe("fieldChanges", () => {
       set: { value: 15000, email: "a@acme.com" },
       unset: ["owner"],
     });
+  });
+});
+
+describe("describeBrainSource", () => {
+  it.each([
+    [{ _tag: "local" } as const, "Only on this machine"],
+    [
+      {
+        _tag: "git",
+        remoteUrl: "git@github.com:acme/brain.git",
+        branch: "main",
+        changes: 1,
+        ahead: 2,
+        behind: 0,
+      } as const,
+      "acme/brain · 1 change here · 2 to push",
+    ],
+    [
+      {
+        _tag: "git",
+        remoteUrl: "https://gitlab.com/acme/brain.git",
+        branch: null,
+        changes: 0,
+        ahead: 0,
+        behind: 0,
+      } as const,
+      "https://gitlab.com/acme/brain · up to date",
+    ],
+  ])("labels %j", (source, label) => {
+    expect(describeBrainSource(source)).toBe(label);
   });
 });
