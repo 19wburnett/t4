@@ -41,6 +41,7 @@ import {
 import { WorkspacePageContainer } from "../WorkspacePageContainer";
 import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { channelFailure } from "./companyChannels.logic";
+import { CompanyBrainRecordsSection } from "./CompanyBrainRecordsSection";
 import { CompanyChannelsSection } from "./CompanyChannelsSection";
 import {
   AGENT_BRIDGE_DRIVER,
@@ -161,6 +162,8 @@ function CompanyHubBody({ group }: { group: SidebarProjectSnapshot }) {
       ) : null}
       <CompanyBrain
         environmentId={primary.environmentId}
+        projectId={primary.id}
+        canReadRecords={canReadChannels}
         workspaceRoot={primary.workspaceRoot}
         brainLoading={brainResult._tag === "Initial"}
         brainContents={hasCompanyBrain ? brain.contents : null}
@@ -379,6 +382,8 @@ function AgentLanes({
 
 function CompanyBrain(props: {
   environmentId: SidebarProjectSnapshot["environmentId"];
+  projectId: ProjectId;
+  canReadRecords: boolean;
   workspaceRoot: string;
   brainLoading: boolean;
   brainContents: string | null;
@@ -419,6 +424,12 @@ function CompanyBrain(props: {
         </h2>
         <span className="text-xs text-muted-foreground">{COMPANY_DIR}/</span>
       </div>
+      {props.canReadRecords ? (
+        <CompanyBrainRecordsSection
+          environmentId={props.environmentId}
+          projectId={props.projectId}
+        />
+      ) : null}
       {props.brainLoading ? null : props.brainContents !== null ? (
         <>
           {importForm}

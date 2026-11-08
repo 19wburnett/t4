@@ -91,6 +91,10 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.companyChannelsListInbox]: AuthFilesystemReadScope,
   [WS_METHODS.companyChannelsReadMessage]: AuthFilesystemReadScope,
   [WS_METHODS.companyChannelsListOutbox]: AuthFilesystemReadScope,
+  // Records are files in the project folder.
+  [WS_METHODS.companyBrainListCollections]: AuthFilesystemReadScope,
+  [WS_METHODS.companyBrainListRecords]: AuthFilesystemReadScope,
+  [WS_METHODS.companyBrainReadRecord]: AuthFilesystemReadScope,
   [WS_METHODS.serverUpdateSettings]: AuthSettingsWriteScope,
   [WS_METHODS.serverSearchAcpRegistry]: AuthOrchestrationReadScope,
   [WS_METHODS.serverPrepareAcpRegistryAgent]: AuthProvidersManageScope,

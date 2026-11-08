@@ -4,6 +4,7 @@ import * as Crypto from "effect/Crypto";
 import * as Orchestrator from "./orchestration-v2/Orchestrator.ts";
 import * as PeerLinkRequests from "./peer/PeerLinkRequests.ts";
 import * as PeerLinks from "./peer/PeerLinks.ts";
+import * as CompanyBrain from "./companyBrain/CompanyBrain.ts";
 import * as CompanyChannels from "./companyChannels/CompanyChannels.ts";
 
 import * as DateTime from "effect/DateTime";
@@ -1347,6 +1348,7 @@ export const layerWsRpc = (
       const peerLinks = yield* PeerLinks.PeerLinks;
       const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
       const companyChannels = yield* CompanyChannels.CompanyChannels;
+      const companyBrain = yield* CompanyBrain.CompanyBrain;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
       const workspaceEntries = yield* WorkspaceEntries.WorkspaceEntries;
       const workspaceFileSystem = yield* WorkspaceFileSystem.WorkspaceFileSystem;
@@ -2538,6 +2540,14 @@ export const layerWsRpc = (
         [WS_METHODS.companyChannelsDiscardDraft]: (input) =>
           companyChannels.discardDraft(input).pipe(Effect.map((discarded) => ({ discarded }))),
         [WS_METHODS.companyChannelsSend]: (input) => companyChannels.send(input),
+        [WS_METHODS.companyBrainListCollections]: ({ projectId }) =>
+          companyBrain.listCollections(projectId),
+        [WS_METHODS.companyBrainListRecords]: (input) => companyBrain.listRecords(input),
+        [WS_METHODS.companyBrainReadRecord]: (input) => companyBrain.readRecord(input),
+        [WS_METHODS.companyBrainSaveRecord]: (input) => companyBrain.saveRecord(input),
+        [WS_METHODS.companyBrainDeleteRecord]: (input) =>
+          companyBrain.deleteRecord(input).pipe(Effect.map((deleted) => ({ deleted }))),
+        [WS_METHODS.companyBrainSaveCollection]: (input) => companyBrain.saveCollection(input),
         [WS_METHODS.peerLinksAnswerRequest]: (input) =>
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
             Effect.andThen(peerLinkRequests.answer(input)),
@@ -3312,6 +3322,7 @@ export const layer = Layer.unwrap(
     const peerLinks = yield* PeerLinks.PeerLinks;
     const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
     const companyChannels = yield* CompanyChannels.CompanyChannels;
+    const companyBrain = yield* CompanyBrain.CompanyBrain;
     const sql = yield* SqlClient.SqlClient;
     return HttpRouter.add(
       "GET",
@@ -3396,6 +3407,7 @@ export const layer = Layer.unwrap(
               Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
               Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),
               Layer.provide(Layer.succeed(CompanyChannels.CompanyChannels, companyChannels)),
+              Layer.provide(Layer.succeed(CompanyBrain.CompanyBrain, companyBrain)),
               Layer.provide(
                 SourceControlDiscovery.layer.pipe(
                   Layer.provide(

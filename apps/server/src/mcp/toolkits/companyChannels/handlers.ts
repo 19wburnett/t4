@@ -21,7 +21,7 @@ const failure = (error: CompanyChannelError) =>
   });
 
 /** Thread agents work for their own company; outside clients name one. */
-const companyProject = Effect.fn("mcp.companyProject")(function* (
+export const companyProject = Effect.fn("mcp.companyProject")(function* (
   projectId: ProjectId | undefined,
 ) {
   const caller = yield* loadCaller();
@@ -32,13 +32,13 @@ const companyProject = Effect.fn("mcp.companyProject")(function* (
   ) {
     return yield* new OrchestratorMcpFailure({
       code: "capability_denied",
-      message: "A thread can only use its own company's channels. Omit projectId.",
+      message: "A thread can only use its own company. Omit projectId.",
     });
   }
   return { caller, projectId: yield* resolveProjectId(caller, projectId) };
 });
 
-const callerLabel = Effect.fn("mcp.companyCallerLabel")(function* (
+export const callerLabel = Effect.fn("mcp.companyCallerLabel")(function* (
   caller: Effect.Success<ReturnType<typeof loadCaller>>,
 ) {
   const client = caller.scope.client;

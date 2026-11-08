@@ -16,6 +16,22 @@ prompt ready to review. Claude reads the source, fills in `company/`, and record
 where the brain came from so it can be refreshed later. Private repos need `gh`
 signed in, and Supabase needs the Supabase MCP server or CLI on that machine.
 
+## Company records
+
+People, companies, deals, investors, candidates, and anything else you track live
+in the company brain as plain files. Each folder in `company/` (other than
+`outbox/`) is a collection, and each Markdown file in it is a record, with its
+fields in the frontmatter and notes below. A folder of notes from Obsidian or a
+GitHub repo works as it is. Add People, Companies, Deals, Fundraising, or Hiring
+from **Collection** under **Company brain** in the Company hub, or create your
+own. A collection with stages shows as a board.
+
+Agents, including Muse and Grok Bot, look up records with `t3_brain_find` and
+create or update them with `t3_brain_save`, which also adds dated notes to a
+record's `## Log`. Edits keep the comments and field order you wrote. A
+collection's `README.md` sets its name, its stages (`stages: [lead, won]`), and
+a description agents read.
+
 ## Drafts and sending
 
 Drafts are Markdown files in the company folder's `company/outbox/`, one per

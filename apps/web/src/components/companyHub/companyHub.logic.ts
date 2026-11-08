@@ -73,7 +73,7 @@ export const WORK_TASK_PRESETS: ReadonlyArray<WorkTaskPreset> = [
     description: "Find leads and draft a sequence",
     target: MUSE,
     prompt:
-      "Build an outbound campaign. Find 20 prospects that match our ideal customer profile, then draft a 3-step email sequence for them. Save the list and drafts under company/outbound/.",
+      "Build an outbound campaign. Find 20 prospects that match our ideal customer profile and save each one with t3_brain_save in the people collection, then draft a 3-step email sequence for them.",
   },
   {
     id: "email",
@@ -316,6 +316,7 @@ export function buildBrainImportPrompt(source: BrainSource): string {
 Then bring what you learn into ${COMPANY_DIR}/ so every agent here can use it:
 - Fill in ${COMPANY_DIR}/BRAIN.md under its existing headings: what we do, who we sell to, our voice, and what is off limits.
 - Fill in ${COMPANY_DIR}/CHANNELS.md with the email, social, and support accounts you find. Never copy credentials or keys.
+- Save people, companies, deals, investors, and candidates you find as records with t3_brain_save, in collections such as people, companies, deals, fundraising, and hiring.
 - Save longer reference material worth keeping (positioning, FAQs, pricing, playbooks) as separate Markdown files in ${COMPANY_DIR}/.
 - End BRAIN.md with a "## Source" section linking ${source.url}, so the brain can be refreshed later.
 
