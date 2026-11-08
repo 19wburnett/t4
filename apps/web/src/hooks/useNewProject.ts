@@ -135,12 +135,14 @@ export function useNewProject() {
     if (input.kind === "company") {
       await writeCompanyBrain({ environmentId: input.environmentId, workspaceRoot });
       await navigate({
-        to: "/company/$projectKey",
-        params: {
-          projectKey: deriveLogicalProjectKeyFromSettings(
+        to: "/settings/company",
+        search: {
+          project: deriveLogicalProjectKeyFromSettings(
             project,
             selectProjectGroupingSettings(getClientSettings()),
           ),
+          machine: undefined,
+          checkout: undefined,
         },
       });
       return true;

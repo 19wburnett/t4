@@ -273,14 +273,12 @@ export const SETTINGS_SEARCH_ITEMS = [
     id: "company-accounts",
     title: "Email & social accounts",
     to: "/settings/company",
-    targetId: "company-accounts",
     searchTerms: ["email inbox gmail outlook icloud imap smtp x twitter linkedin threads channels"],
   },
   {
     id: "company-brain",
     title: "Company brain",
     to: "/settings/company",
-    targetId: "company-brain",
     searchTerms: ["brain crm github repo sync supabase import records"],
   },
   {

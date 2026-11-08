@@ -169,8 +169,12 @@ function CompanyDraftsList({
               type="button"
               onClick={() =>
                 void navigate({
-                  to: "/company/$projectKey",
-                  params: { projectKey: company.projectKey },
+                  to: "/settings/company",
+                  search: {
+                    project: company.projectKey,
+                    machine: undefined,
+                    checkout: undefined,
+                  },
                 })
               }
               className="flex h-9 w-full cursor-pointer items-center gap-2 rounded-md px-2 text-left text-sm outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"

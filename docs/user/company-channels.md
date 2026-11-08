@@ -1,9 +1,11 @@
 # Company channels
 
-A company can connect email accounts and X, LinkedIn, and Threads accounts in
-**Settings → Company**, where you also set up its brain. Open a company's day-to-day
-work, such as its inbox, outbox, and records, with **Company** at the bottom of the
-sidebar or **Open Company hub** in those settings. Agents read the inbox and write drafts; only you send them.
+Everything for a company lives in **Settings → Company**: starting work, its
+agents, inbox and outbox, its brain and records, and the email and social
+accounts it uses. Open it with **Company** at the bottom of the sidebar, which
+reopens the company you last worked in, or pick another company at the top of
+the page. A company can connect email accounts and X, LinkedIn, and Threads
+accounts there. Agents read the inbox and write drafts; only you send them.
 Credentials stay on the environment that runs the company and are never shown
 again after you save them. Saving an account signs in with it first, so a
 mistyped password or token is caught right away.
@@ -20,7 +22,7 @@ server or CLI on that machine.
 
 ## Sync the brain with a repo
 
-Choose **Sync with a repo** under **Company brain** in Settings → Company and enter a GitHub repo or
+Choose **Sync with a repo** under **Company brain** and enter a GitHub repo or
 any git clone URL. T4 clones it as `company/`. Files that were only in
 `company/` are kept; where the repo has a different version of a file, the
 repo's wins and yours is saved to a backup folder T4 names. **Sync** commits
@@ -36,7 +38,7 @@ in the company brain as plain files. Each folder in `company/` (other than
 `outbox/`) is a collection, and each Markdown file in it is a record, with its
 fields in the frontmatter and notes below. A folder of notes from Obsidian or a
 GitHub repo works as it is. Add People, Companies, Deals, Fundraising, or Hiring
-from **Collection** under **Company brain** in the Company hub, or create your
+from **Collection** under **Company brain**, or create your
 own. A collection with stages shows as a board.
 
 Agents, including Muse and Grok Bot, look up records with `t3_brain_find` and
@@ -51,7 +53,7 @@ Drafts are Markdown files in the company folder's `company/outbox/`, one per
 email or post, with its details in the frontmatter at the top. Agents in the
 company's threads, and Muse or Grok Bot through their tasks, create them with
 `t3_company_draft`; you can also write or edit them yourself. Review a draft in
-the Company hub and send it there. Sending marks the file `sent` with the time
+Settings → Company and send it there. Sending marks the file `sent` with the time
 and, for posts, a link. A failed send is marked `failed` with the reason, and
 you can fix the draft or the account and send it again. Sent drafts cannot be
 sent twice or discarded; they stay as a record.

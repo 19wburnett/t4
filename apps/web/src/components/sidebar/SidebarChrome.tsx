@@ -250,9 +250,10 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
     const projectKey =
       projectGroups.find((group) => group.projectKey === last)?.projectKey ??
       projectGroups[0]?.projectKey;
-    void (projectKey === undefined
-      ? navigate({ to: "/settings/company" })
-      : navigate({ to: "/company/$projectKey", params: { projectKey } }));
+    void navigate({
+      to: "/settings/company",
+      search: { project: projectKey, machine: undefined, checkout: undefined },
+    });
   };
   const handleNeedsYouClick = () => {
     closeMobileSidebar();

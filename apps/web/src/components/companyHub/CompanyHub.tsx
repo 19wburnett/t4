@@ -8,10 +8,9 @@ import {
 import { useAtomValue } from "@effect/atom-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { AsyncResult } from "effect/reactivity";
-import { BookOpenIcon, PlusIcon, Settings2Icon } from "lucide-react";
-import { type ReactNode, useEffect, useState } from "react";
+import { PlusIcon } from "lucide-react";
+import { useEffect, useState } from "react";
 
-import { isElectron } from "~/env";
 import { useProviderEntryByEnvironmentAndInstanceId } from "~/hooks/useProviderEntryByEnvironmentAndInstanceId";
 import { cn } from "~/lib/utils";
 import { isProviderInstancePickerReady } from "~/providerInstances";
@@ -24,22 +23,16 @@ import { formatRelativeTimeLabel } from "~/timestampFormat";
 import type { SidebarProjectSnapshot } from "../../sidebarProjectGrouping";
 import ChatMarkdown from "../ChatMarkdown";
 import { ProviderInstanceIcon } from "../chat/ProviderInstanceIcon";
-import { useSettingsProjectGroups } from "../settings/useSettingsProjectGroups";
 import { ThreadRowLeadingStatus } from "../ThreadStatusIndicators";
 import { Button } from "../ui/button";
-import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "../ui/empty";
-import { SidebarInset } from "../ui/sidebar";
-import {
-  WorkspaceBreadcrumb,
-  WorkspaceBreadcrumbItem,
-  WorkspaceBreadcrumbSeparator,
-} from "../WorkspaceBreadcrumb";
-import { WorkspacePageContainer } from "../WorkspacePageContainer";
-import { WorkspacePageHeader } from "../WorkspacePageHeader";
 import { channelFailure } from "./companyChannels.logic";
 import { CompanyBrainRecordsSection } from "./CompanyBrainRecordsSection";
-import { CompanyBrainSourceBar } from "./CompanyBrainSourceBar";
-import { companyProjectOf, useCompanyBrainFile } from "./CompanySetup";
+import {
+  CompanyAccountsSetup,
+  CompanyBrainSetup,
+  companyProjectOf,
+  useCompanyBrainFile,
+} from "./CompanySetup";
 import { rememberLastCompany } from "./lastCompany";
 import {
   AGENT_BRIDGE_DRIVER,
@@ -57,48 +50,8 @@ import { useStartWorkThread } from "./useStartWorkThread";
 
 const LANE_THREAD_LIMIT = 8;
 
-export function CompanyHubPage({ projectKey }: { projectKey: string }) {
-  const group = useSettingsProjectGroups().find((entry) => entry.projectKey === projectKey);
-  return (
-    <SidebarInset className="h-dvh min-h-0 overflow-hidden overscroll-y-none">
-      <WorkspacePageHeader electron={isElectron} className="bg-background">
-        <WorkspaceBreadcrumb ariaLabel="Company hub" className="overflow-hidden">
-          <WorkspaceBreadcrumbItem>Company hub</WorkspaceBreadcrumbItem>
-          <WorkspaceBreadcrumbSeparator />
-          <WorkspaceBreadcrumbItem current>
-            <h1 className="truncate">{group?.displayName ?? "Unknown project"}</h1>
-          </WorkspaceBreadcrumbItem>
-        </WorkspaceBreadcrumb>
-        <div className="ml-auto flex items-center gap-1 [-webkit-app-region:no-drag]">
-          <Button
-            size="sm"
-            variant="ghost"
-            render={<CompanySettingsLink projectKey={projectKey} />}
-          >
-            <Settings2Icon aria-hidden />
-            Company settings
-          </Button>
-        </div>
-      </WorkspacePageHeader>
-      <div className="topbar-scroll-fade scrollbar-gutter-both min-h-0 flex-1 overflow-y-auto">
-        {group ? (
-          <CompanyHubBody group={group} />
-        ) : (
-          <Empty>
-            <EmptyHeader>
-              <EmptyTitle>Project not found</EmptyTitle>
-              <EmptyDescription>
-                It may have been removed, or its machine is not connected.
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        )}
-      </div>
-    </SidebarInset>
-  );
-}
-
-function CompanyHubBody({ group }: { group: SidebarProjectSnapshot }) {
+/** Everything for one company: its work, its brain, and the accounts it sends from. */
+export function CompanyHub({ group }: { group: SidebarProjectSnapshot }) {
   // oxlint-disable-next-line t3code/no-unreasoned-state-sync -- records the visit in localStorage for the sidebar's Company button
   useEffect(() => rememberLastCompany(group.projectKey), [group.projectKey]);
   const primary = companyProjectOf(group);
@@ -111,7 +64,7 @@ function CompanyHubBody({ group }: { group: SidebarProjectSnapshot }) {
     startWorkThread(primary, prompt, target);
 
   return (
-    <WorkspacePageContainer width="expanded">
+    <>
       <section aria-labelledby="company-hub-start" className="flex flex-col gap-3">
         <h2 id="company-hub-start" className="text-sm font-medium text-muted-foreground">
           Start work
@@ -141,27 +94,46 @@ function CompanyHubBody({ group }: { group: SidebarProjectSnapshot }) {
         <CompanyChannelSections
           environmentId={primary.environmentId}
           projectId={primary.id}
-          projectKey={group.projectKey}
           onAskAgent={(agent, prompt) => void startThread(prompt, { kind: "bridge", agent })}
         />
       ) : null}
-      <CompanyBrain
-        environmentId={primary.environmentId}
-        projectId={primary.id}
-        projectKey={group.projectKey}
-        canReadRecords={canReadChannels}
-        workspaceRoot={primary.workspaceRoot}
-        brainLoading={brain.loading}
-        brainContents={brain.contents}
-      />
-    </WorkspacePageContainer>
+      <section aria-labelledby="company-hub-brain" className="flex flex-col gap-3">
+        <div className="flex items-center gap-2">
+          <h2 id="company-hub-brain" className="text-sm font-medium text-muted-foreground">
+            Company brain
+          </h2>
+          <span className="text-xs text-muted-foreground">{COMPANY_DIR}/</span>
+        </div>
+        {canReadChannels ? <CompanyBrainSetup project={primary} /> : null}
+        {canReadChannels ? (
+          <CompanyBrainRecordsSection
+            environmentId={primary.environmentId}
+            projectId={primary.id}
+          />
+        ) : null}
+        {brain.contents !== null ? (
+          <div
+            className={cn(
+              "rounded-xl border border-border/60 bg-card px-4 py-3",
+              brain.contents.trim().length === 0 && "text-muted-foreground",
+            )}
+          >
+            <ChatMarkdown
+              text={brain.contents}
+              cwd={primary.workspaceRoot}
+              environmentId={primary.environmentId}
+            />
+          </div>
+        ) : null}
+      </section>
+      {canReadChannels ? <CompanyAccountsSetup project={primary} /> : null}
+    </>
   );
 }
 
 function CompanyChannelSections(props: {
   readonly environmentId: SidebarProjectSnapshot["environmentId"];
   readonly projectId: ProjectId;
-  readonly projectKey: string;
   readonly onAskAgent: (agent: BridgeAgent, prompt: string) => void;
 }) {
   const target = { environmentId: props.environmentId, input: { projectId: props.projectId } };
@@ -177,18 +149,6 @@ function CompanyChannelSections(props: {
 
   return (
     <>
-      {accountsResult._tag === "Success" && accounts.length === 0 ? (
-        <p className="text-sm text-muted-foreground">
-          Connect an email inbox or an X, LinkedIn, or Threads account in{" "}
-          <CompanySettingsLink
-            projectKey={props.projectKey}
-            className="underline underline-offset-2 hover:text-foreground"
-          >
-            Company settings
-          </CompanySettingsLink>
-          . Agents draft into the outbox; only you send.
-        </p>
-      ) : null}
       <CompanyInboxSection
         environmentId={props.environmentId}
         projectId={props.projectId}
@@ -367,87 +327,5 @@ function AgentLanes({
         </div>
       )}
     </section>
-  );
-}
-
-function CompanyBrain(props: {
-  environmentId: SidebarProjectSnapshot["environmentId"];
-  projectId: ProjectId;
-  projectKey: string;
-  canReadRecords: boolean;
-  workspaceRoot: string;
-  brainLoading: boolean;
-  brainContents: string | null;
-}) {
-  return (
-    <section aria-labelledby="company-hub-brain" className="flex flex-col gap-3">
-      <div className="flex items-center gap-2">
-        <h2 id="company-hub-brain" className="text-sm font-medium text-muted-foreground">
-          Company brain
-        </h2>
-        <span className="text-xs text-muted-foreground">{COMPANY_DIR}/</span>
-        {props.canReadRecords ? (
-          <div className="ml-auto min-w-0">
-            <CompanyBrainSourceBar
-              environmentId={props.environmentId}
-              projectId={props.projectId}
-            />
-          </div>
-        ) : null}
-      </div>
-      {props.canReadRecords ? (
-        <CompanyBrainRecordsSection
-          environmentId={props.environmentId}
-          projectId={props.projectId}
-        />
-      ) : null}
-      {props.brainLoading ? null : props.brainContents !== null ? (
-        <div
-          className={cn(
-            "rounded-xl border border-border/60 bg-card px-4 py-3",
-            props.brainContents.trim().length === 0 && "text-muted-foreground",
-          )}
-        >
-          <ChatMarkdown
-            text={props.brainContents}
-            cwd={props.workspaceRoot}
-            environmentId={props.environmentId}
-          />
-        </div>
-      ) : (
-        <div className="rounded-xl border border-dashed border-border/70">
-          <Empty>
-            <EmptyHeader>
-              <BookOpenIcon aria-hidden className="size-5 text-muted-foreground" />
-              <EmptyTitle>No company brain yet</EmptyTitle>
-              <EmptyDescription>
-                Who you are, who you sell to, your voice, and your channels, in {COMPANY_DIR}/.
-                Every agent reads it before it starts work.
-              </EmptyDescription>
-            </EmptyHeader>
-            <Button size="sm" render={<CompanySettingsLink projectKey={props.projectKey} />}>
-              Set up in Settings
-            </Button>
-          </Empty>
-        </div>
-      )}
-    </section>
-  );
-}
-
-function CompanySettingsLink({
-  projectKey,
-  ...props
-}: {
-  readonly projectKey: string;
-  readonly className?: string;
-  readonly children?: ReactNode;
-}) {
-  return (
-    <Link
-      {...props}
-      to="/settings/company"
-      search={{ project: projectKey, machine: undefined, checkout: undefined }}
-    />
   );
 }

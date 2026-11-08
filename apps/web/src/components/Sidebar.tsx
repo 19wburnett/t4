@@ -1218,8 +1218,8 @@ export default function Sidebar({ routeReveal }: { routeReveal: SidebarRouteReve
   const openCompanyHub = useStableCallback((projectGroup: SidebarProjectSnapshot) => {
     if (isMobile) setOpenMobile(false);
     void router.navigate({
-      to: "/company/$projectKey",
-      params: { projectKey: projectGroup.projectKey },
+      to: "/settings/company",
+      search: { project: projectGroup.projectKey, machine: undefined, checkout: undefined },
     });
   });
   const {

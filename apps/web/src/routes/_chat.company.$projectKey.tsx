@@ -1,12 +1,11 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { CompanyHubPage } from "../components/companyHub/CompanyHubPage";
-
-function CompanyHubRoute() {
-  const { projectKey } = Route.useParams();
-  return <CompanyHubPage projectKey={projectKey} />;
-}
-
+// The Company hub lives in Settings now; old links still land there.
 export const Route = createFileRoute("/_chat/company/$projectKey")({
-  component: CompanyHubRoute,
+  beforeLoad: ({ params }) => {
+    throw redirect({
+      to: "/settings/company",
+      search: { project: params.projectKey, machine: undefined, checkout: undefined },
+    });
+  },
 });
