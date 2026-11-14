@@ -5,7 +5,7 @@ import {
 import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
 import {
   AuthAccessWriteScope,
-  AuthStandardClientScopes,
+  COMPANY_ADMIN_SCOPES,
   type CompanyBrainCollection,
   CompanyBrainCollectionId,
   type EnvironmentId,
@@ -17,7 +17,8 @@ import { CheckIcon, CopyIcon, EllipsisIcon, UserPlusIcon, UsersIcon } from "luci
 import { useState } from "react";
 
 import { useCopyToClipboard } from "~/hooks/useCopyToClipboard";
-import { authEnvironment } from "~/state/auth";
+import { authAccessListAtom } from "~/state/auth";
+import { environmentIdsKey } from "~/state/environmentAtomList";
 import { companyBrainEnvironment } from "~/state/companyBrain";
 import { companyMembers } from "~/state/companyMembers";
 import { useEnvironmentScope } from "~/state/session";
@@ -41,6 +42,7 @@ import { Menu, MenuItem, MenuPopup, MenuTrigger } from "../ui/menu";
 import { Toggle, ToggleGroup } from "../ui/toggle-group";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { brainFailure } from "./companyBrain.logic";
+import { accessSnapshotOf, removalPlan } from "./companyMachines.logic";
 import {
   type Member,
   memberFields,
@@ -51,6 +53,7 @@ import {
   MEMBERS_COLLECTION_LABEL,
   MEMBERS_DESCRIPTION,
 } from "./companyPeople.logic";
+import { useCompanyMachines } from "./useCompanyRecords";
 
 /** Our own failures explain themselves; anything else is a transport problem. */
 const failureMessage = (error: unknown) =>
@@ -193,12 +196,17 @@ function ManagedMemberCard(props: {
   readonly projectId: ProjectId;
   readonly member: Member;
 }) {
-  const access = useAtomValue(
-    authEnvironment.accessChanges({ environmentId: props.environmentId, input: null }),
+  const machines = useCompanyMachines(props.environmentId, props.projectId);
+  const accessLists = useAtomValue(
+    authAccessListAtom(environmentIdsKey(machines.map((machine) => machine.environmentId))),
   );
-  const event = AsyncResult.getOrElse(access, () => null);
-  const snapshot = event?.type === "snapshot" ? event.payload : null;
+  const snapshots = accessLists.map((result) =>
+    accessSnapshotOf(AsyncResult.getOrElse(result, () => null)),
+  );
+  // The company's own machine is always first.
+  const snapshot = snapshots[0] ?? null;
   const held = snapshot === null ? null : memberAccess(snapshot, props.member.recordId);
+  const plan = removalPlan({ memberId: props.member.recordId, machines, snapshots });
   const revoke = useAtomCommand(companyMembers.revoke, { label: "remove teammate" });
   const deleteRecord = useAtomCommand(companyBrainEnvironment.deleteRecord, {
     label: "remove teammate record",
@@ -217,18 +225,17 @@ function ManagedMemberCard(props: {
             ? "Invite not used yet"
             : "No access on this machine";
 
+  // Access on every company machine goes first, so the record never outlives it unnoticed.
   const remove = async () => {
-    if (held === null) return;
-    const revoked = await revoke({
-      environmentId: props.environmentId,
-      input: {
-        sessionIds: held.sessions.map((session) => session.sessionId),
-        pairingLinkIds: held.pairingLinks.map((link) => link.id),
-      },
-    });
-    if (revoked._tag === "Failure") {
-      errorToast("Could not remove access", failureMessage(squashAtomCommandFailure(revoked)));
-      return;
+    for (const machine of plan.revoke) {
+      const revoked = await revoke({
+        environmentId: machine.environmentId,
+        input: { sessionIds: machine.sessionIds, pairingLinkIds: machine.pairingLinkIds },
+      });
+      if (revoked._tag === "Failure") {
+        errorToast("Could not remove access", failureMessage(squashAtomCommandFailure(revoked)));
+        return;
+      }
     }
     const deleted = await deleteRecord({
       environmentId: props.environmentId,
@@ -277,13 +284,26 @@ function ManagedMemberCard(props: {
           <DialogHeader>
             <DialogTitle>Remove {props.member.name}?</DialogTitle>
             <DialogDescription>
-              Signs them out of this machine, cancels unused invite links and deletes their record.
-              Threads they started stay, so you can still read and continue them.
+              Signs them out of the company's machines, cancels unused invite links and deletes
+              their record. Threads they started stay, so you can still read and continue them.
             </DialogDescription>
           </DialogHeader>
+          {plan.unchecked.length > 0 ? (
+            <DialogPanel>
+              <p className="text-sm text-muted-foreground">
+                Couldn't check {plan.unchecked.join(", ")}. Any access they have there stays until
+                an admin of that machine takes it away under Machines.
+              </p>
+            </DialogPanel>
+          ) : null}
           <DialogFooter>
             <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
-            <Button size="sm" variant="destructive" onClick={() => void remove()}>
+            <Button
+              size="sm"
+              variant="destructive"
+              disabled={snapshot === null}
+              onClick={() => void remove()}
+            >
               Remove
             </Button>
           </DialogFooter>
@@ -425,7 +445,7 @@ function InviteDialog(props: {
 }
 
 /** Mints a fresh one-use link each time it opens: links are single-use by design. */
-function InviteLinkDialog(props: {
+export function InviteLinkDialog(props: {
   readonly environmentId: EnvironmentId;
   readonly member: Member;
   readonly onClose: () => void;
@@ -442,7 +462,7 @@ function InviteLinkDialog(props: {
       input: {
         memberId: props.member.recordId,
         label: props.member.name,
-        ...(props.member.role === "admin" ? { scopes: AuthStandardClientScopes } : {}),
+        ...(props.member.role === "admin" ? { scopes: COMPANY_ADMIN_SCOPES } : {}),
       },
     });
     setLink(

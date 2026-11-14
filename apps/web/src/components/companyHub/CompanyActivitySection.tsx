@@ -1,13 +1,10 @@
 import { scopeThreadRef } from "@t3tools/client-runtime/environment";
 import type { EnvironmentThreadShell } from "@t3tools/client-runtime/state/models";
-import { CompanyBrainCollectionId, type EnvironmentId, type ProjectId } from "@t3tools/contracts";
-import { useAtomValue } from "@effect/atom-react";
+import type { EnvironmentId, ProjectId } from "@t3tools/contracts";
 import { useNavigate } from "@tanstack/react-router";
-import { AsyncResult } from "effect/reactivity";
 import { useState } from "react";
 
 import { cn } from "~/lib/utils";
-import { companyBrainEnvironment } from "~/state/companyBrain";
 import { useProjects, useQuietThreadShells } from "~/state/entities";
 import { buildThreadRouteParams } from "~/threadRoutes";
 import { formatRelativeTimeLabel } from "~/timestampFormat";
@@ -27,7 +24,9 @@ import {
   threadActivity,
   threadStarterName,
 } from "./companyPeople.logic";
+import { machineOwners } from "./companyMachines.logic";
 import { employeeFromRecord, TEAM_COLLECTION } from "./companyTeam.logic";
+import { useCompanyMachines, useCompanyRecords } from "./useCompanyRecords";
 
 const OWNER_LABEL = "Owner";
 const ROW_LIMIT = 20;
@@ -40,37 +39,35 @@ const VIEW_LABELS: Record<ActivityView, string> = {
   project: "Projects",
 };
 
-function useBrainRecords(environmentId: EnvironmentId, projectId: ProjectId, collection: string) {
-  const listing = useAtomValue(
-    companyBrainEnvironment.records({
-      environmentId,
-      input: { projectId, collection: CompanyBrainCollectionId.make(collection) },
-    }),
-  );
-  return AsyncResult.getOrElse(listing, () => null)?.records ?? [];
-}
-
 /**
- * What everyone on this machine is doing, one view at a time. It reads only thread shells, so
+ * What everyone on the company's machines is doing, one view at a time. It reads only thread shells, so
  * watching the team never loads a transcript; opening a row does.
  */
 export function CompanyActivitySection(props: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId;
 }) {
-  const memberRecords = useBrainRecords(props.environmentId, props.projectId, MEMBERS_COLLECTION);
-  const employeeRecords = useBrainRecords(props.environmentId, props.projectId, TEAM_COLLECTION);
+  const memberRecords = useCompanyRecords(props.environmentId, props.projectId, MEMBERS_COLLECTION);
+  const employeeRecords = useCompanyRecords(props.environmentId, props.projectId, TEAM_COLLECTION);
   const members = memberRecords.map(memberFromRecord);
   const employees = employeeRecords.map(employeeFromRecord);
-  const shells = useQuietThreadShells().filter(
-    (thread) => thread.environmentId === props.environmentId,
+  const machines = useCompanyMachines(props.environmentId, props.projectId);
+  const credit = { members, machineOwners: machineOwners(machines) };
+  const machineNames = new Map<string, string>(
+    machines.map((machine) => [machine.environmentId, machine.name]),
   );
-  const projects = useProjects().filter((project) => project.environmentId === props.environmentId);
+  const shells = useQuietThreadShells().filter((thread) => machineNames.has(thread.environmentId));
+  const projects = useProjects().filter((project) => machineNames.has(project.environmentId));
+  // Name the machine on each row only once there is more than one to tell apart.
+  const machineOf =
+    machines.length > 1
+      ? (thread: EnvironmentThreadShell) => machineNames.get(thread.environmentId) ?? ""
+      : undefined;
 
   const [view, setView] = useState<ActivityView>("everyone");
   const [personKey, setPersonKey] = useState<string>(OWNER_KEY);
   const [employeeKey, setEmployeeKey] = useState<string | null>(null);
-  const [projectKey, setProjectKey] = useState<string>(props.projectId);
+  const [projectKey, setProjectKey] = useState<string>(`${props.environmentId}:${props.projectId}`);
 
   const openActor = (actor: ActivityActor) => {
     if (actor.kind === "employee") {
@@ -116,7 +113,7 @@ export function CompanyActivitySection(props: {
       </div>
       {view === "everyone" ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {everyoneSummaries({ threads: shells, members, employees }).map((summary) => (
+          {everyoneSummaries({ threads: shells, credit, employees }).map((summary) => (
             <ActorCard key={summary.key} summary={summary} onOpen={openActor} />
           ))}
         </div>
@@ -132,7 +129,8 @@ export function CompanyActivitySection(props: {
             onChange={setPersonKey}
           />
           <ThreadList
-            threads={personThreads(shells, personKey === OWNER_KEY ? null : personKey, members)}
+            machine={machineOf}
+            threads={personThreads(shells, personKey === OWNER_KEY ? null : personKey, credit)}
             empty="Nothing started yet."
           />
         </>
@@ -151,8 +149,9 @@ export function CompanyActivitySection(props: {
               onChange={setEmployeeKey}
             />
             <ThreadList
+              machine={machineOf}
               threads={employeeThreads(shells, selectedEmployee.recordId)}
-              starter={(thread) => threadStarterName(thread, members, OWNER_LABEL)}
+              starter={(thread) => threadStarterName(thread, credit, OWNER_LABEL)}
               empty={`Nobody has asked ${selectedEmployee.name} for work yet.`}
             />
           </>
@@ -162,12 +161,18 @@ export function CompanyActivitySection(props: {
           <Picker
             label="Project"
             value={projectKey}
-            items={projects.map((project) => ({ value: project.id, label: project.title }))}
+            items={projects.map((project) => ({
+              value: `${project.environmentId}:${project.id}`,
+              label: machineOf
+                ? `${project.title} · ${machineNames.get(project.environmentId) ?? ""}`
+                : project.title,
+            }))}
             onChange={setProjectKey}
           />
           <ThreadList
-            threads={projectThreads(shells, projectKey as ProjectId)}
-            starter={(thread) => threadStarterName(thread, members, OWNER_LABEL)}
+            machine={machineOf}
+            threads={projectThreads(shells, projectKey)}
+            starter={(thread) => threadStarterName(thread, credit, OWNER_LABEL)}
             empty="No work in this project yet."
           />
         </>
@@ -245,6 +250,7 @@ function Picker(props: {
 
 function ThreadList(props: {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
+  readonly machine: ((thread: EnvironmentThreadShell) => string) | undefined;
   readonly starter?: (thread: EnvironmentThreadShell) => string;
   readonly empty: string;
 }) {
@@ -279,6 +285,11 @@ function ThreadList(props: {
                 {THREAD_ACTIVITY_LABELS[activity]}
               </span>
               <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+              {props.machine ? (
+                <span className="shrink-0 truncate text-xs text-muted-foreground">
+                  {props.machine(thread)}
+                </span>
+              ) : null}
               {props.starter ? (
                 <span className="shrink-0 truncate text-xs text-muted-foreground">
                   {props.starter(thread)}

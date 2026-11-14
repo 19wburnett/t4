@@ -119,12 +119,6 @@ export const OrchestrationV2LinkOrigin = Schema.Struct({
 export type OrchestrationV2LinkOrigin = typeof OrchestrationV2LinkOrigin.Type;
 
 /**
- * Work from a link paired below full access may change only work from the same
- * link. A full-access link's agents already run as this environment's user,
- * so fencing T3's own tools would stop nothing they could not do anyway. An
- * origin stamped before access was recorded stays fenced.
- */
-/**
  * Who in the company a thread is for. `memberId` is the teammate whose session started it
  * (absent: the owner); only the server sets it. `employeeId` is the AI employee doing the work.
  * Both are `company/` brain record ids.
@@ -142,6 +136,12 @@ export const companyFieldsOf = (source: {
   ...(source.employeeId === undefined ? {} : { employeeId: source.employeeId }),
 });
 
+/**
+ * Work from a link paired below full access may change only work from the same
+ * link. A full-access link's agents already run as this environment's user,
+ * so fencing T3's own tools would stop nothing they could not do anyway. An
+ * origin stamped before access was recorded stays fenced.
+ */
 export const linkOriginIsFenced = (origin: OrchestrationV2LinkOrigin) =>
   origin.access !== "full-access";
 

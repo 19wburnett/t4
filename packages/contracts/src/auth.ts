@@ -431,6 +431,13 @@ export const COMPANY_MEMBER_SCOPES: ReadonlyArray<AuthGrantScope> = [
   AuthDiagnosticsReadScope,
 ];
 
+/** An admin teammate also manages who has access, but not providers, settings or the server. */
+export const COMPANY_ADMIN_SCOPES: ReadonlyArray<AuthGrantScope> = [
+  ...COMPANY_MEMBER_SCOPES,
+  AuthAccessReadScope,
+  AuthAccessWriteScope,
+];
+
 export const AuthMcpClientAccess = Schema.Literals([
   "read-only",
   "approval-required",

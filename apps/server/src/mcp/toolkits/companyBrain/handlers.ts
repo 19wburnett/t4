@@ -2,20 +2,29 @@ import {
   CompanyBrainCollectionId,
   type CompanyBrainError,
   type CompanyBrainRecordSummary,
+  EnvironmentId,
   type OrchestrationV2ThreadShell,
   OrchestratorMcpFailure,
   type ProjectId,
+  type ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
+import * as Option from "effect/Option";
 
 import * as CompanyBrain from "../../../companyBrain/CompanyBrain.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
+import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
+import * as McpInvocationContext from "../../McpInvocationContext.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { callerLabel, companyProject } from "../companyChannels/handlers.ts";
-import { CompanyBrainToolkit } from "./tools.ts";
+import { CompanyBrainToolkit, TeamActivityTool } from "./tools.ts";
 
 const DEFAULT_LIMIT = 25;
+
+const byNewest = (left: { readonly updatedAt: string }, right: { readonly updatedAt: string }) =>
+  right.updatedAt.localeCompare(left.updatedAt);
 
 const failure = (error: CompanyBrainError) =>
   new OrchestratorMcpFailure({
@@ -32,15 +41,33 @@ const matches = (record: CompanyBrainRecordSummary, query: string) => {
 };
 
 const EVERYONE_THREADS = 3;
+const MACHINE_THREADS = 50;
+const REMOTE_TIMEOUT = Duration.seconds(5);
 const ACTIVE_STATUSES = new Set(["preparing", "queued", "starting", "running", "waiting"]);
 
-interface Roster {
+export interface Roster {
   readonly members: ReadonlyArray<CompanyBrainRecordSummary>;
   readonly employees: ReadonlyArray<CompanyBrainRecordSummary>;
+  /** Company machines other than this one, and the teammate whose own machine each is. */
+  readonly machines: ReadonlyArray<{
+    readonly name: string;
+    readonly environmentId: EnvironmentId;
+    readonly ownerMemberId: string | null;
+  }>;
 }
 
-/** A company without a people or team list yet simply has nobody in it. */
-const rosterOf = Effect.fn("mcp.teamActivity.roster")(function* (projectId: ProjectId) {
+const EMPTY_ROSTER: Roster = { members: [], employees: [], machines: [] };
+
+const textField = (record: CompanyBrainRecordSummary, key: string) => {
+  const value = record.fields[key];
+  return typeof value === "string" && value.trim() !== "" ? value.trim() : null;
+};
+
+/** A company without a people, team or machine list yet simply has nobody in it. */
+const rosterOf = Effect.fn("mcp.teamActivity.roster")(function* (
+  projectId: ProjectId,
+  here: EnvironmentId,
+) {
   const brain = yield* CompanyBrain.CompanyBrain;
   const records = (collection: string) =>
     brain.listRecords({ projectId, collection: CompanyBrainCollectionId.make(collection) }).pipe(
@@ -50,12 +77,38 @@ const rosterOf = Effect.fn("mcp.teamActivity.roster")(function* (projectId: Proj
   return {
     members: yield* records("members"),
     employees: yield* records("agents"),
+    machines: (yield* records("machines")).flatMap((record) => {
+      const environmentId = textField(record, "environmentId");
+      return environmentId === null || environmentId === here
+        ? []
+        : [
+            {
+              name: record.title,
+              environmentId: EnvironmentId.make(environmentId),
+              ownerMemberId: textField(record, "ownerMemberId"),
+            },
+          ];
+    }),
   } satisfies Roster;
 });
 
-const activityRow = (thread: OrchestrationV2ThreadShell, roster: Roster) => ({
+/** One thread as the tool reports it, before names are resolved against a roster. */
+export interface ActivityRow {
+  readonly threadId: ThreadId;
+  readonly title: string;
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
+  readonly status: string;
+  readonly waitingOn: "approval" | "answer" | null;
+  readonly memberId: string | null;
+  readonly employeeId: string | null;
+  readonly updatedAt: string;
+}
+
+const rowOf = (environmentId: EnvironmentId, thread: OrchestrationV2ThreadShell): ActivityRow => ({
   threadId: thread.id,
   title: thread.title,
+  environmentId,
   projectId: thread.projectId,
   status: thread.status,
   waitingOn:
@@ -63,19 +116,55 @@ const activityRow = (thread: OrchestrationV2ThreadShell, roster: Roster) => ({
       ? null
       : thread.pendingRuntimeRequest.kind === "user_input" ||
           thread.pendingRuntimeRequest.kind === "mcp-elicitation"
-        ? ("answer" as const)
-        : ("approval" as const),
-  startedBy: roster.members.find((member) => member.id === thread.memberId)?.title ?? "Owner",
-  employee:
-    thread.employeeId === undefined
-      ? null
-      : (roster.employees.find((employee) => employee.id === thread.employeeId)?.title ??
-        thread.employeeId),
+        ? "answer"
+        : "approval",
+  memberId: thread.memberId ?? null,
+  employeeId: thread.employeeId ?? null,
   updatedAt: DateTime.formatIso(thread.updatedAt),
 });
 
-const isActive = (thread: OrchestrationV2ThreadShell) =>
-  ACTIVE_STATUSES.has(thread.status) || thread.pendingRuntimeRequest !== null;
+const isActive = (row: ActivityRow) => ACTIVE_STATUSES.has(row.status) || row.waitingOn !== null;
+
+/**
+ * Who a row is for: the teammate whose session started it, else the teammate whose own machine
+ * it is on, else the owner (`null`). A starter no longer on the roster counts as the owner.
+ */
+export const starterOf = (roster: Roster) => {
+  const known = new Set<string>(roster.members.map((member) => member.id));
+  const owners = new Map(
+    roster.machines.map((machine) => [machine.environmentId as string, machine.ownerMemberId]),
+  );
+  return (row: ActivityRow) => {
+    const starter = row.memberId ?? owners.get(row.environmentId) ?? null;
+    return starter !== null && known.has(starter) ? starter : null;
+  };
+};
+
+const present = (row: ActivityRow, roster: Roster, starter: string | null) => ({
+  ...row,
+  memberId: starter,
+  startedBy: roster.members.find((member) => member.id === starter)?.title ?? "Owner",
+  employee:
+    row.employeeId === null
+      ? null
+      : (roster.employees.find((employee) => employee.id === row.employeeId)?.title ??
+        row.employeeId),
+});
+
+const localRows = Effect.fn("mcp.teamActivity.localRows")(function* (here: EnvironmentId) {
+  const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+  const threads = yield* threadManagement
+    .listProjectThreads({ includeSubagents: false })
+    .pipe(
+      Effect.mapError(
+        (error) =>
+          new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message }),
+      ),
+    );
+  return threads
+    .filter((thread) => thread.archivedAt === null && thread.deletedAt === null)
+    .map((thread) => rowOf(here, thread));
+});
 
 export const layer = McpToolAccess.toLayer(CompanyBrainToolkit, {
   t3_brain_find: McpToolAccess.readsPrivate((input) =>
@@ -128,65 +217,108 @@ export const layer = McpToolAccess.toLayer(CompanyBrainToolkit, {
       };
     }).pipe(Effect.catchTags({ CompanyBrainError: (error) => Effect.fail(failure(error)) })),
   ),
-  t3_team_activity: McpToolAccess.readsPrivate((input) =>
+  t3_team_activity: McpToolAccess.reads((input) =>
     Effect.gen(function* () {
-      const { projectId } = yield* companyProject(input.projectId);
-      const roster = yield* rosterOf(projectId);
-      const threadManagement = yield* ThreadManagementService.ThreadManagementService;
-      const threads = (yield* threadManagement
-        .listProjectThreads({ includeSubagents: false })
-        .pipe(
-          Effect.mapError(
-            (error) =>
-              new OrchestratorMcpFailure({ code: "orchestration_error", message: error.message }),
-          ),
-        ))
-        .filter((thread) => thread.archivedAt === null && thread.deletedAt === null)
-        .toSorted(
-          (left, right) =>
-            DateTime.toEpochMillis(right.updatedAt) - DateTime.toEpochMillis(left.updatedAt),
+      const scope = yield* McpInvocationContext.McpInvocationContext;
+      const here = scope.environmentId;
+      const limit = input.limit ?? DEFAULT_LIMIT;
+
+      // Another company machine asks this for its threads; this one need not know the company.
+      if (input.view === "machine") {
+        const roster = yield* companyProject(input.projectId).pipe(
+          Effect.flatMap(({ projectId }) => rosterOf(projectId, here)),
+          Effect.orElseSucceed(() => EMPTY_ROSTER),
         );
-      const known = new Set<string>(roster.members.map((member) => member.id));
-      const startedByOwner = (thread: OrchestrationV2ThreadShell) =>
-        thread.memberId === undefined || !known.has(thread.memberId);
+        const starter = starterOf(roster);
+        const rows = (yield* localRows(here)).toSorted(byNewest).slice(0, limit);
+        return {
+          groups: [
+            {
+              kind: "machine" as const,
+              id: here,
+              name: "This machine",
+              active: rows.filter(isActive).length,
+              // Raw ids: the asking machine resolves them against its own roster.
+              threads: rows.map((row) => ({
+                ...present(row, roster, starter(row)),
+                memberId: row.memberId,
+              })),
+            },
+          ],
+          unreachable: [],
+        };
+      }
+
+      const { projectId } = yield* companyProject(input.projectId);
+      const roster = yield* rosterOf(projectId, here);
+      const forwarding = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
+      // Machines are read at once, each with a deadline, so one offline machine costs seconds.
+      const remotes = yield* Effect.forEach(
+        roster.machines,
+        (machine) =>
+          (Option.isNone(forwarding)
+            ? Effect.succeedNone
+            : forwarding.value
+                .call(scope, TeamActivityTool, machine.environmentId, {
+                  environmentId: machine.environmentId,
+                  view: "machine",
+                  limit: MACHINE_THREADS,
+                })
+                .pipe(Effect.timeout(REMOTE_TIMEOUT), Effect.option)
+          ).pipe(Effect.map((result) => ({ machine, result }))),
+        { concurrency: "unbounded" },
+      );
+      const unreachable = remotes.flatMap(({ machine, result }) =>
+        Option.isNone(result) ? [machine.name] : [],
+      );
+      const rows: Array<ActivityRow> = [...(yield* localRows(here))];
+      for (const { machine, result } of remotes) {
+        if (Option.isNone(result)) continue;
+        for (const group of result.value.groups) {
+          for (const thread of group.threads) {
+            rows.push({ ...thread, environmentId: machine.environmentId });
+          }
+        }
+      }
+      const sorted = rows.toSorted(byNewest);
+      const starter = starterOf(roster);
       const group = (
         kind: "owner" | "member" | "employee" | "project",
         id: string | null,
         name: string,
-        matching: ReadonlyArray<OrchestrationV2ThreadShell>,
-        limit: number,
+        matching: ReadonlyArray<ActivityRow>,
+        count: number,
       ) => ({
         kind,
         id,
         name,
         active: matching.filter(isActive).length,
-        threads: matching.slice(0, limit).map((thread) => activityRow(thread, roster)),
+        threads: matching.slice(0, count).map((row) => present(row, roster, starter(row))),
       });
-      const limit = input.limit ?? DEFAULT_LIMIT;
+      const startedBy = (memberId: string | null) =>
+        sorted.filter((row) => starter(row) === memberId);
+      const forEmployee = (employeeId: string) =>
+        sorted.filter((row) => row.employeeId === employeeId);
+
       switch (input.view) {
         case "everyone":
           return {
             groups: [
-              group("owner", null, "Owner", threads.filter(startedByOwner), EVERYONE_THREADS),
+              group("owner", null, "Owner", startedBy(null), EVERYONE_THREADS),
               ...roster.members.map((member) =>
-                group(
-                  "member",
-                  member.id,
-                  member.title,
-                  threads.filter((thread) => thread.memberId === member.id),
-                  EVERYONE_THREADS,
-                ),
+                group("member", member.id, member.title, startedBy(member.id), EVERYONE_THREADS),
               ),
               ...roster.employees.map((employee) =>
                 group(
                   "employee",
                   employee.id,
                   employee.title,
-                  threads.filter((thread) => thread.employeeId === employee.id),
+                  forEmployee(employee.id),
                   EVERYONE_THREADS,
                 ),
               ),
             ],
+            unreachable,
           };
         case "person": {
           const member = roster.members.find((entry) => entry.id === input.memberId);
@@ -199,15 +331,10 @@ export const layer = McpToolAccess.toLayer(CompanyBrainToolkit, {
           return {
             groups: [
               member === undefined
-                ? group("owner", null, "Owner", threads.filter(startedByOwner), limit)
-                : group(
-                    "member",
-                    member.id,
-                    member.title,
-                    threads.filter((thread) => thread.memberId === member.id),
-                    limit,
-                  ),
+                ? group("owner", null, "Owner", startedBy(null), limit)
+                : group("member", member.id, member.title, startedBy(member.id), limit),
             ],
+            unreachable,
           };
         }
         case "employee": {
@@ -220,14 +347,9 @@ export const layer = McpToolAccess.toLayer(CompanyBrainToolkit, {
           }
           return {
             groups: [
-              group(
-                "employee",
-                employee.id,
-                employee.title,
-                threads.filter((thread) => thread.employeeId === employee.id),
-                limit,
-              ),
+              group("employee", employee.id, employee.title, forEmployee(employee.id), limit),
             ],
+            unreachable,
           };
         }
         case "project": {
@@ -238,10 +360,11 @@ export const layer = McpToolAccess.toLayer(CompanyBrainToolkit, {
                 "project",
                 workProjectId,
                 workProjectId,
-                threads.filter((thread) => thread.projectId === workProjectId),
+                sorted.filter((row) => row.projectId === workProjectId),
                 limit,
               ),
             ],
+            unreachable,
           };
         }
       }

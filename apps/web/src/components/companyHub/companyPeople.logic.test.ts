@@ -17,10 +17,11 @@ const thread = (
     readonly archived?: boolean;
     readonly subagent?: boolean;
     readonly at?: string;
+    readonly on?: EnvironmentId;
   } = {},
 ) => {
   const base = makeThreadFixture({ id: ThreadId.make(id) }).source;
-  return presentThreadShell(environmentId, {
+  return presentThreadShell(fields.on ?? environmentId, {
     ...base,
     ...(fields.memberId === undefined ? {} : { memberId: fields.memberId }),
     ...(fields.employeeId === undefined ? {} : { employeeId: fields.employeeId }),
@@ -43,6 +44,10 @@ const sam: Member = {
   role: "member",
 };
 
+const samsComputer = EnvironmentId.make("environment-sams-computer");
+
+const credit = { members: [sam], machineOwners: new Map([[samsComputer as string, "sam"]]) };
+
 const marketer: Employee = {
   recordId: CompanyBrainRecordId.make("marketer"),
   name: "Marketer",
@@ -59,12 +64,14 @@ describe("everyoneSummaries", () => {
       thread("sam-asks-marketer", { memberId: "sam", employeeId: "marketer" }),
       // A removed teammate's work stays visible, under the owner.
       thread("removed-teammate", { memberId: "alex" }),
+      // Sam works on their own computer without a member session there.
+      thread("sam-own-computer", { on: samsComputer, at: "2026-11-11T00:00:00.000Z" }),
       thread("archived", { memberId: "sam", archived: true }),
       thread("child", { memberId: "sam", subagent: true }),
     ];
 
     const byKey = Object.fromEntries(
-      everyoneSummaries({ threads, members: [sam], employees: [marketer] }).map((summary) => [
+      everyoneSummaries({ threads, credit, employees: [marketer] }).map((summary) => [
         summary.key,
         summary.threads.map((entry) => entry.id),
       ]),
@@ -72,10 +79,10 @@ describe("everyoneSummaries", () => {
 
     expect(byKey).toEqual({
       owner: ["owner-own", "removed-teammate"],
-      "member:sam": ["sam-direct", "sam-asks-marketer"],
+      "member:sam": ["sam-direct", "sam-own-computer", "sam-asks-marketer"],
       "employee:marketer": ["sam-asks-marketer"],
     });
-    expect(personThreads(threads, "sam", [sam]).map((entry) => entry.id)).toEqual(
+    expect(personThreads(threads, "sam", credit).map((entry) => entry.id)).toEqual(
       byKey["member:sam"],
     );
   });

@@ -64,18 +64,38 @@ their browser in to this machine as them, so their threads show who started
 them. Their browser has to reach this machine, for example over Tailscale.
 
 A **Member** can see everyone's work and change only the threads they start;
-they can fork anyone's thread to continue it as their own. An **Admin** can also
-invite people and change anyone's thread. Neither can change providers,
-settings, or who has access. Both run agents and terminals as this machine's
-user, so invite people you trust with it.
+they can fork anyone's thread to continue it as their own. Routines and agent
+session imports run as the machine's owner, so only the owner and admins manage
+them. An **Admin** can also invite and remove people and change anyone's
+thread. Neither can change providers, settings, or the server itself. Both run
+agents and terminals as this machine's user, so invite people you trust with it.
 
 **New invite link** makes another link when one expires or was used up.
-**Remove from company** signs them out of this machine, cancels unused links,
+**Remove from company** signs them out of every company machine you can manage
+from this browser, cancels unused links,
 and deletes their record. Their threads stay.
+
+## Machines
+
+A company can work on more than one machine. **Add machine** under **Machines**
+lists the other T4 machines you are connected to (add one in Settings →
+Environments first) and saves your pick to `company/machines/`. On a machine
+where you are an admin, **Manage access** gives a teammate an invite link for
+that machine, or takes their access away. **Remove from company** takes the
+machine off the list without changing who can use it.
+
+A teammate can add their own computer the same way: connect the company's
+browser tab to their own T4 in Settings → Environments, then **Add my
+computer**. Work on it counts as theirs in **Activity**.
+
+**Let agents see its work** gives the company machine's agents a read-only link
+to another machine, so `t3_team_activity` includes that machine's threads.
+It needs Linked environments turned on in Settings → Labs on both machines, and
+you must be an admin of both. **Stop** removes the link.
 
 ## Activity
 
-**Activity** shows what everyone on this machine is doing, one view at a time:
+**Activity** shows what everyone on the company's machines is doing, one view at a time:
 **Everyone** has a card per person and AI employee; click one to see their
 threads. **People**, **AI employees**, and **Projects** list the threads for
 the one you pick. Agents see the same views with `t3_team_activity`, so they
