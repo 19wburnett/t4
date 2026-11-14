@@ -43,7 +43,7 @@ export const BrowserCredentialListResult = Schema.Struct({
 });
 export type BrowserCredentialListResult = typeof BrowserCredentialListResult.Type;
 
-const MAX_IMPORT_ENTRIES = 20_000;
+export const BROWSER_CREDENTIAL_MAX_IMPORT_ENTRIES = 20_000;
 
 export const BrowserCredentialImportEntry = Schema.Struct({
   origin: Schema.String.check(Schema.isMaxLength(2048)),
@@ -55,7 +55,9 @@ export type BrowserCredentialImportEntry = typeof BrowserCredentialImportEntry.T
 /** Replaces every login previously imported under the same `sourceName`. */
 export const BrowserCredentialImportInput = Schema.Struct({
   sourceName: TrimmedNonEmptyString.check(Schema.isMaxLength(128)),
-  entries: Schema.Array(BrowserCredentialImportEntry).check(Schema.isMaxLength(MAX_IMPORT_ENTRIES)),
+  entries: Schema.Array(BrowserCredentialImportEntry).check(
+    Schema.isMaxLength(BROWSER_CREDENTIAL_MAX_IMPORT_ENTRIES),
+  ),
 });
 export type BrowserCredentialImportInput = typeof BrowserCredentialImportInput.Type;
 
@@ -77,7 +79,9 @@ export const BrowserCredentialUnlockInput = Schema.Struct({
 export type BrowserCredentialUnlockInput = typeof BrowserCredentialUnlockInput.Type;
 
 export const BrowserCredentialRemoveInput = Schema.Struct({
-  credentialIds: Schema.Array(BrowserCredentialId).check(Schema.isMaxLength(MAX_IMPORT_ENTRIES)),
+  credentialIds: Schema.Array(BrowserCredentialId).check(
+    Schema.isMaxLength(BROWSER_CREDENTIAL_MAX_IMPORT_ENTRIES),
+  ),
 });
 export type BrowserCredentialRemoveInput = typeof BrowserCredentialRemoveInput.Type;
 

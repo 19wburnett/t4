@@ -486,6 +486,9 @@ it.effect.each([
   [WS_METHODS.companyChannelsSend, AuthSettingsWriteScope],
   [WS_METHODS.companyChannelsSaveDraft, AuthFilesystemWriteScope],
   [WS_METHODS.companyChannelsDiscardDraft, AuthFilesystemWriteScope],
+  [WS_METHODS.connectorsSave, AuthSettingsWriteScope],
+  [WS_METHODS.connectorsRemove, AuthSettingsWriteScope],
+  [WS_METHODS.connectorsRefresh, AuthSettingsWriteScope],
 ] as const)("requires %s's own grant, not orchestration", ([method, scope]) =>
   Effect.scoped(
     Effect.gen(function* () {

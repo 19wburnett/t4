@@ -23,6 +23,7 @@
 - [T3 Connect troubleshooting](./user/t3-connect-troubleshooting.md)
 - [Outside agents (MCP)](./user/outside-agents.md)
 - [Company channels](./user/company-channels.md)
+- [Connectors](./user/connectors.md)
 - [Running in the background](./user/background-service.md)
 - [Updating T3 Code](./user/updating.md)
 - [Triage an issue](./user/triage.md)

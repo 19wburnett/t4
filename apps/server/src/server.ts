@@ -78,6 +78,8 @@ import * as PeerLinks from "./peer/PeerLinks.ts";
 import * as CompanyBrain from "./companyBrain/CompanyBrain.ts";
 import * as CompanyBrainSource from "./companyBrain/CompanyBrainSource.ts";
 import * as CompanyChannels from "./companyChannels/CompanyChannels.ts";
+import * as Connectors from "./connectors/Connectors.ts";
+import * as GoogleCallbackRoute from "./connectors/googleCallbackRoute.ts";
 import * as MailTransport from "./companyChannels/MailTransport.ts";
 import * as PeerMcpClient from "./peer/PeerMcpClient.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
@@ -740,6 +742,7 @@ const layerMakeRoutes = Layer.mergeAll(
     ),
     ServerHttp.layerOtlpTracesProxyRoute,
     ServerHttp.layerAssetRoute,
+    GoogleCallbackRoute.layer,
     ServerHttp.layerAttachmentUploadRoute,
     GuestHttp.layer,
     DeviceHubProxy.layer,
@@ -781,6 +784,8 @@ const layerMakeRoutes = Layer.mergeAll(
   ),
   // Company channel accounts and sign-ins, shared by the Company hub (WebSocket) and agents (/mcp).
   Layer.provide(CompanyChannels.layer.pipe(Layer.provide(MailTransport.layer))),
+  // Connected MCP servers, shared by Settings (WebSocket) and agents (/mcp).
+  Layer.provide(Connectors.layer),
   // Company records, shared by the Company hub (WebSocket) and agents (/mcp).
   Layer.provide(CompanyBrain.layer),
   Layer.provide(CompanyBrainSource.layer),
