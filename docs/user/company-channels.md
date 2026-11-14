@@ -82,6 +82,15 @@ where you are an admin, **Manage access** gives a teammate an invite link for
 that machine, or takes their access away. **Remove from company** takes the
 machine off the list without changing who can use it.
 
+A teammate can add their own computer the same way: connect the company's
+browser tab to their own T4 in Settings → Environments, then **Add my
+computer**. Work on it counts as theirs in **Activity**.
+
+**Let agents see its work** gives the company machine's agents a read-only link
+to another machine, so `t3_team_activity` includes that machine's threads.
+It needs Linked environments turned on in Settings → Labs on both machines, and
+you must be an admin of both. **Stop** removes the link.
+
 ## Activity
 
 **Activity** shows what everyone on the company's machines is doing, one view at a time:

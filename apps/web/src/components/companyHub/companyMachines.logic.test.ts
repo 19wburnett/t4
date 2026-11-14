@@ -20,7 +20,9 @@ const record = (title: string, environmentId: string): CompanyBrainRecordSummary
   path: `company/machines/${title.toLowerCase()}.md`,
   title,
   fields:
-    environmentId === "" ? { kind: "machine" } : machineFields(EnvironmentId.make(environmentId)),
+    environmentId === ""
+      ? { kind: "machine" }
+      : machineFields(EnvironmentId.make(environmentId), null),
   updatedAt: null,
 });
 

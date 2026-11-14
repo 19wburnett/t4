@@ -5,6 +5,8 @@ import {
   CompanyBrainRecord,
   CompanyBrainRecordId,
   CompanyBrainRecordSummary,
+  EnvironmentId,
+  OrchestratorMcpEnvironmentTarget,
   OrchestratorMcpFailure,
   ProjectId,
   ThreadId,
@@ -76,24 +78,34 @@ const CompanyBrainSaveTool = Tool.make("t3_brain_save", {
   }),
 }).annotate(Tool.Destructive, false);
 
-export const TeamActivityView = Schema.Literals(["everyone", "person", "employee", "project"]);
+export const TeamActivityView = Schema.Literals([
+  "everyone",
+  "person",
+  "employee",
+  "project",
+  "machine",
+]);
 
 const TeamActivityThread = Schema.Struct({
   threadId: ThreadId,
   title: Schema.String,
+  environmentId: EnvironmentId,
   projectId: ProjectId,
   status: Schema.String,
   waitingOn: Schema.NullOr(Schema.Literals(["approval", "answer"])),
   startedBy: Schema.String,
+  memberId: Schema.NullOr(Schema.String),
   employee: Schema.NullOr(Schema.String),
+  employeeId: Schema.NullOr(Schema.String),
   updatedAt: Schema.String,
 });
 
-const TeamActivityTool = Tool.make("t3_team_activity", {
+export const TeamActivityTool = Tool.make("t3_team_activity", {
   ...shared,
   description:
-    "See what the people and AI employees on this machine are working on, one view at a time. everyone: each person and employee with their latest threads. person: one teammate's threads (memberId; omit for the owner). employee: one AI employee's threads (employeeId). project: everyone's threads in workProjectId. Check before starting work that could overlap someone else's; read a thread with t3_thread_read.",
+    "See what the company's people and AI employees are working on across its machines, one view at a time. everyone: each person and employee with their latest threads. person: one teammate's threads (memberId; omit for the owner). employee: one AI employee's threads (employeeId). project: everyone's threads in workProjectId. machine: every thread on one machine. Check before starting work that could overlap someone else's; read a thread with t3_thread_read and its environmentId.",
   parameters: Schema.Struct({
+    environmentId: OrchestratorMcpEnvironmentTarget,
     projectId,
     view: TeamActivityView,
     memberId: Schema.optional(TrimmedNonEmptyString),
@@ -104,13 +116,15 @@ const TeamActivityTool = Tool.make("t3_team_activity", {
   success: Schema.Struct({
     groups: Schema.Array(
       Schema.Struct({
-        kind: Schema.Literals(["owner", "member", "employee", "project"]),
+        kind: Schema.Literals(["owner", "member", "employee", "project", "machine"]),
         id: Schema.NullOr(Schema.String),
         name: Schema.String,
         active: Schema.Int,
         threads: Schema.Array(TeamActivityThread),
       }),
     ),
+    /** Company machines this one could not read: not linked from here, or offline. */
+    unreachable: Schema.Array(Schema.String),
   }),
 }).annotate(Tool.Destructive, false);
 

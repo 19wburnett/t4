@@ -1,5 +1,8 @@
 import { memberAccess } from "@t3tools/client-runtime/state/companyMembers";
-import { squashAtomCommandFailure } from "@t3tools/client-runtime/state/runtime";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
 import {
   AuthAccessWriteScope,
   CompanyBrainCollectionId,
@@ -8,14 +11,22 @@ import {
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import { AsyncResult } from "effect/reactivity";
+import * as Result from "effect/Result";
 import { EllipsisIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 
 import { authEnvironment } from "~/state/auth";
 import { companyBrainEnvironment } from "~/state/companyBrain";
 import { companyMembers } from "~/state/companyMembers";
+import {
+  offersLinkedEnvironmentsAtom,
+  peerLinkEnvironment,
+  useLinkableMachines,
+  useLinkedEnvironments,
+} from "~/state/peerLinks";
+import { mintPairingCodeOn } from "~/state/peerPairingCode";
 import { useConnectedEnvironmentIds, useEnvironments } from "~/state/environments";
-import { useEnvironmentScope } from "~/state/session";
+import { environmentSession, useEnvironmentScope } from "~/state/session";
 import { useAtomCommand } from "~/state/use-atom-command";
 import { Button } from "../ui/button";
 import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
@@ -76,6 +87,9 @@ export function CompanyMachinesSection(props: {
   const deleteRecord = useAtomCommand(companyBrainEnvironment.deleteRecord, {
     label: "remove machine",
   });
+  // A teammate who adds a machine is adding their own computer, so its threads count as theirs.
+  const myMemberId =
+    useAtomValue(environmentSession.sessionStateValueAtom(props.environmentId))?.memberId ?? null;
   const { environments } = useEnvironments();
   const listed = new Set<string>(machines.map((machine) => machine.environmentId));
   const candidates = environments.filter((environment) => !listed.has(environment.environmentId));
@@ -102,7 +116,7 @@ export function CompanyMachinesSection(props: {
         projectId: props.projectId,
         collection: CompanyBrainCollectionId.make(MACHINES_COLLECTION),
         title: name,
-        set: machineFields(environmentId),
+        set: machineFields(environmentId, myMemberId),
       },
     });
     if (saved._tag === "Failure") {
@@ -135,7 +149,7 @@ export function CompanyMachinesSection(props: {
           <Menu>
             <MenuTrigger render={<Button size="xs" variant="ghost" className="ml-auto" />}>
               <PlusIcon aria-hidden />
-              Add machine
+              {myMemberId === null ? "Add machine" : "Add my computer"}
             </MenuTrigger>
             <MenuPopup align="end">
               {candidates.length === 0 ? (
@@ -160,6 +174,7 @@ export function CompanyMachinesSection(props: {
         {machines.map((machine) => (
           <MachineCard
             key={machine.environmentId}
+            companyEnvironmentId={props.environmentId}
             machine={machine}
             members={members}
             {...(canWrite && machine.recordId !== null
@@ -173,11 +188,17 @@ export function CompanyMachinesSection(props: {
 }
 
 function MachineCard(props: {
+  readonly companyEnvironmentId: EnvironmentId;
   readonly machine: CompanyMachine;
   readonly members: ReadonlyArray<Member>;
   readonly onRemove?: () => void;
 }) {
   const connected = useConnectedEnvironmentIds().includes(props.machine.environmentId);
+  const ownerName =
+    props.machine.ownerMemberId === null
+      ? null
+      : (props.members.find((member) => member.recordId === props.machine.ownerMemberId)?.name ??
+        null);
   const canManage = useEnvironmentScope(props.machine.environmentId, AuthAccessWriteScope);
   return (
     <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border/70 bg-background/70 px-3 py-2.5">
@@ -186,9 +207,12 @@ function MachineCard(props: {
         <span className="shrink-0 text-xs text-muted-foreground">
           {props.machine.recordId === null
             ? "Company machine"
-            : connected
-              ? "Connected"
-              : "Not connected here"}
+            : [
+                ownerName === null ? null : `${ownerName}'s computer`,
+                connected ? "Connected" : "Not connected here",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
         </span>
         {props.onRemove ? (
           <Menu>
@@ -214,6 +238,9 @@ function MachineCard(props: {
             : "Connect to it to see and change who uses it."}
         </span>
       )}
+      {props.machine.recordId !== null ? (
+        <AgentLink companyEnvironmentId={props.companyEnvironmentId} machine={props.machine} />
+      ) : null}
     </div>
   );
 }
@@ -300,5 +327,104 @@ function MachineAccess(props: {
         />
       ) : null}
     </>
+  );
+}
+
+/**
+ * Whether the company machine's agents can read this one, through a read-only link from the
+ * company machine. Linking mints the code here with the user's own session, so no code is typed.
+ */
+function AgentLink(props: {
+  readonly companyEnvironmentId: EnvironmentId;
+  readonly machine: CompanyMachine;
+}) {
+  const offered = useAtomValue(offersLinkedEnvironmentsAtom(props.companyEnvironmentId));
+  const linked = useLinkedEnvironments(props.companyEnvironmentId).has(props.machine.environmentId);
+  const canLink = useAtomValue(peerLinkEnvironment.link.permissionAtom(props.companyEnvironmentId));
+  const mayMint = useEnvironmentScope(props.machine.environmentId, AuthAccessWriteScope);
+  const linkable = useLinkableMachines(
+    props.companyEnvironmentId,
+    offered && canLink && mayMint && !linked,
+  ).find((candidate) => candidate.environmentId === props.machine.environmentId);
+  const link = useAtomCommand(peerLinkEnvironment.link, { label: "let agents see machine" });
+  const unlink = useAtomCommand(peerLinkEnvironment.unlink, {
+    label: "stop agents seeing machine",
+  });
+  const [busy, setBusy] = useState(false);
+
+  if (!offered) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        To let agents see its work, turn on Linked environments in Settings → Labs on both machines.
+      </span>
+    );
+  }
+  if (linked) {
+    return (
+      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        Agents on the company machine can see its work.
+        {canLink ? (
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              const result = await unlink({
+                environmentId: props.companyEnvironmentId,
+                input: { environmentId: props.machine.environmentId },
+              });
+              setBusy(false);
+              if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+                errorToast("Could not stop sharing", String(squashAtomCommandFailure(result)));
+              }
+            }}
+          >
+            Stop
+          </Button>
+        ) : null}
+      </span>
+    );
+  }
+  const [url, ...alternateUrls] = linkable?.urls ?? [];
+  if (!canLink || !mayMint || url === undefined) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        Agents can't see its work yet. An admin of both machines can let them.
+      </span>
+    );
+  }
+  return (
+    <Button
+      size="xs"
+      variant="outline"
+      className="mt-1 self-start"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        const code = await mintPairingCodeOn(props.machine.environmentId, "read-only");
+        const result = Result.isSuccess(code)
+          ? await link({
+              environmentId: props.companyEnvironmentId,
+              input: {
+                url,
+                ...(alternateUrls.length > 0 ? { alternateUrls } : {}),
+                expectedEnvironmentId: props.machine.environmentId,
+                expectedLabel: props.machine.name,
+                pairingCode: code.success,
+                access: "read-only",
+              },
+            })
+          : null;
+        setBusy(false);
+        if (result === null) {
+          errorToast("Could not let agents see it", "Could not get a pairing code from there.");
+        } else if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          errorToast("Could not let agents see it", String(squashAtomCommandFailure(result)));
+        }
+      }}
+    >
+      Let agents see its work
+    </Button>
   );
 }
