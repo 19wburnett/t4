@@ -1,0 +1,447 @@
+import { memberAccess } from "@t3tools/client-runtime/state/companyMembers";
+import {
+  isAtomCommandInterrupted,
+  squashAtomCommandFailure,
+} from "@t3tools/client-runtime/state/runtime";
+import {
+  AuthAccessWriteScope,
+  CompanyBrainCollectionId,
+  type EnvironmentId,
+  type ProjectId,
+} from "@t3tools/contracts";
+import { useAtomValue } from "@effect/atom-react";
+import { AsyncResult } from "effect/reactivity";
+import * as Result from "effect/Result";
+import { EllipsisIcon, PlusIcon } from "lucide-react";
+import { useState } from "react";
+
+import { authEnvironment } from "~/state/auth";
+import { companyBrainEnvironment } from "~/state/companyBrain";
+import { companyMembers } from "~/state/companyMembers";
+import {
+  offersLinkedEnvironmentsAtom,
+  peerLinkEnvironment,
+  useLinkableMachines,
+  useLinkedEnvironments,
+} from "~/state/peerLinks";
+import { mintPairingCodeOn } from "~/state/peerPairingCode";
+import { useConnectedEnvironmentIds, useEnvironments } from "~/state/environments";
+import { environmentSession, useEnvironmentScope } from "~/state/session";
+import { useAtomCommand } from "~/state/use-atom-command";
+import { Button } from "../ui/button";
+import { Menu, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "../ui/menu";
+import { stackedThreadToast, toastManager } from "../ui/toast";
+import { brainFailure } from "./companyBrain.logic";
+import {
+  type CompanyMachine,
+  machineFields,
+  machineMemberAccess,
+  MACHINES_COLLECTION,
+  MACHINES_COLLECTION_LABEL,
+  MACHINES_DESCRIPTION,
+} from "./companyMachines.logic";
+import { type Member, memberFromRecord, MEMBERS_COLLECTION } from "./companyPeople.logic";
+import { InviteLinkDialog } from "./CompanyPeopleSection";
+import { useCompanyMachines, useCompanyRecords } from "./useCompanyRecords";
+
+const ACCESS_LABELS = {
+  online: "online",
+  "signed-in": "signed in",
+  invited: "invite not used yet",
+} as const;
+
+const errorToast = (title: string, description: string) =>
+  toastManager.add(stackedThreadToast({ type: "error", title, description }));
+
+/**
+ * The machines the company works on and who may use each. Giving a teammate a machine mints
+ * their invite on that machine, so the admin's own session there is what grants it.
+ */
+export function CompanyMachinesSection(props: {
+  readonly environmentId: EnvironmentId;
+  readonly projectId: ProjectId;
+}) {
+  const machines = useCompanyMachines(props.environmentId, props.projectId);
+  const members = useCompanyRecords(props.environmentId, props.projectId, MEMBERS_COLLECTION).map(
+    memberFromRecord,
+  );
+  const listing = useAtomValue(
+    companyBrainEnvironment.collections({
+      environmentId: props.environmentId,
+      input: { projectId: props.projectId },
+    }),
+  );
+  const hasCollection =
+    AsyncResult.getOrElse(listing, () => null)?.collections.some(
+      (collection) => collection.id === MACHINES_COLLECTION,
+    ) ?? false;
+  const canWrite = useAtomValue(
+    companyBrainEnvironment.saveRecord.permissionAtom(props.environmentId),
+  );
+  const saveCollection = useAtomCommand(companyBrainEnvironment.saveCollection, {
+    label: "add machines collection",
+  });
+  const saveRecord = useAtomCommand(companyBrainEnvironment.saveRecord, {
+    label: "add machine",
+  });
+  const deleteRecord = useAtomCommand(companyBrainEnvironment.deleteRecord, {
+    label: "remove machine",
+  });
+  // A teammate who adds a machine is adding their own computer, so its threads count as theirs.
+  const myMemberId =
+    useAtomValue(environmentSession.sessionStateValueAtom(props.environmentId))?.memberId ?? null;
+  const { environments } = useEnvironments();
+  const listed = new Set<string>(machines.map((machine) => machine.environmentId));
+  const candidates = environments.filter((environment) => !listed.has(environment.environmentId));
+
+  const addMachine = async (environmentId: EnvironmentId, name: string) => {
+    if (!hasCollection) {
+      const created = await saveCollection({
+        environmentId: props.environmentId,
+        input: {
+          projectId: props.projectId,
+          collection: CompanyBrainCollectionId.make(MACHINES_COLLECTION),
+          label: MACHINES_COLLECTION_LABEL,
+          description: MACHINES_DESCRIPTION,
+        },
+      });
+      if (created._tag === "Failure") {
+        errorToast("Could not add the machine list", brainFailure(created.cause).message);
+        return;
+      }
+    }
+    const saved = await saveRecord({
+      environmentId: props.environmentId,
+      input: {
+        projectId: props.projectId,
+        collection: CompanyBrainCollectionId.make(MACHINES_COLLECTION),
+        title: name,
+        set: machineFields(environmentId, myMemberId),
+      },
+    });
+    if (saved._tag === "Failure") {
+      errorToast("Could not add machine", brainFailure(saved.cause).message);
+    }
+  };
+
+  const removeMachine = async (machine: CompanyMachine) => {
+    if (machine.recordId === null) return;
+    const deleted = await deleteRecord({
+      environmentId: props.environmentId,
+      input: {
+        projectId: props.projectId,
+        collection: CompanyBrainCollectionId.make(MACHINES_COLLECTION),
+        recordId: machine.recordId,
+      },
+    });
+    if (deleted._tag === "Failure") {
+      errorToast("Could not remove machine", brainFailure(deleted.cause).message);
+    }
+  };
+
+  return (
+    <section aria-labelledby="company-hub-machines" className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 id="company-hub-machines" className="text-sm font-medium text-muted-foreground">
+          Machines
+        </h2>
+        {canWrite ? (
+          <Menu>
+            <MenuTrigger render={<Button size="xs" variant="ghost" className="ml-auto" />}>
+              <PlusIcon aria-hidden />
+              {myMemberId === null ? "Add machine" : "Add my computer"}
+            </MenuTrigger>
+            <MenuPopup align="end">
+              {candidates.length === 0 ? (
+                <MenuItem disabled>
+                  Connect another T4 machine in Settings → Environments first
+                </MenuItem>
+              ) : (
+                candidates.map((environment) => (
+                  <MenuItem
+                    key={environment.environmentId}
+                    onClick={() => void addMachine(environment.environmentId, environment.label)}
+                  >
+                    {environment.label}
+                  </MenuItem>
+                ))
+              )}
+            </MenuPopup>
+          </Menu>
+        ) : null}
+      </div>
+      <div className="grid gap-2 sm:grid-cols-2">
+        {machines.map((machine) => (
+          <MachineCard
+            key={machine.environmentId}
+            companyEnvironmentId={props.environmentId}
+            machine={machine}
+            members={members}
+            {...(canWrite && machine.recordId !== null
+              ? { onRemove: () => void removeMachine(machine) }
+              : {})}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function MachineCard(props: {
+  readonly companyEnvironmentId: EnvironmentId;
+  readonly machine: CompanyMachine;
+  readonly members: ReadonlyArray<Member>;
+  readonly onRemove?: () => void;
+}) {
+  const connected = useConnectedEnvironmentIds().includes(props.machine.environmentId);
+  const ownerName =
+    props.machine.ownerMemberId === null
+      ? null
+      : (props.members.find((member) => member.recordId === props.machine.ownerMemberId)?.name ??
+        null);
+  const canManage = useEnvironmentScope(props.machine.environmentId, AuthAccessWriteScope);
+  return (
+    <div className="flex min-w-0 flex-col gap-1 rounded-lg border border-border/70 bg-background/70 px-3 py-2.5">
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1 truncate text-sm font-medium">{props.machine.name}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {props.machine.recordId === null
+            ? "Company machine"
+            : [
+                ownerName === null ? null : `${ownerName}'s computer`,
+                connected ? "Connected" : "Not connected here",
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+        </span>
+        {props.onRemove ? (
+          <Menu>
+            <MenuTrigger
+              render={<Button size="icon-xs" variant="ghost" aria-label="Machine actions" />}
+            >
+              <EllipsisIcon aria-hidden />
+            </MenuTrigger>
+            <MenuPopup align="end">
+              <MenuItem variant="destructive" onClick={props.onRemove}>
+                Remove from company
+              </MenuItem>
+            </MenuPopup>
+          </Menu>
+        ) : null}
+      </div>
+      {connected && canManage ? (
+        <MachineAccess environmentId={props.machine.environmentId} members={props.members} />
+      ) : (
+        <span className="text-xs text-muted-foreground">
+          {connected
+            ? "Only an admin of this machine can see and change who uses it."
+            : "Connect to it to see and change who uses it."}
+        </span>
+      )}
+      {props.machine.recordId !== null ? (
+        <AgentLink companyEnvironmentId={props.companyEnvironmentId} machine={props.machine} />
+      ) : null}
+    </div>
+  );
+}
+
+/** Who may use one machine, read from that machine's own access list. */
+function MachineAccess(props: {
+  readonly environmentId: EnvironmentId;
+  readonly members: ReadonlyArray<Member>;
+}) {
+  const access = useAtomValue(
+    authEnvironment.accessChanges({ environmentId: props.environmentId, input: null }),
+  );
+  const event = AsyncResult.getOrElse(access, () => null);
+  const snapshot = event?.type === "snapshot" ? event.payload : null;
+  const revoke = useAtomCommand(companyMembers.revoke, { label: "remove machine access" });
+  const [inviting, setInviting] = useState<Member | null>(null);
+  if (snapshot === null) return null;
+
+  const holders = machineMemberAccess(snapshot);
+  const withAccess = props.members.filter((member) => holders.has(member.recordId));
+  const without = props.members.filter((member) => !holders.has(member.recordId));
+  // Removed from the company but still holding access here, so it can still be taken away.
+  const known = new Set<string>(props.members.map((member) => member.recordId));
+  const former = [...holders.keys()].filter((memberId) => !known.has(memberId));
+
+  const removeAccess = async (memberId: string) => {
+    const held = memberAccess(snapshot, memberId);
+    const revoked = await revoke({
+      environmentId: props.environmentId,
+      input: {
+        sessionIds: held.sessions.map((session) => session.sessionId),
+        pairingLinkIds: held.pairingLinks.map((link) => link.id),
+      },
+    });
+    if (revoked._tag === "Failure") {
+      const error = squashAtomCommandFailure(revoked);
+      errorToast(
+        "Could not remove access",
+        error instanceof Error ? error.message : "Could not reach this machine.",
+      );
+    }
+  };
+
+  return (
+    <>
+      <span className="text-xs text-muted-foreground">
+        {withAccess.length === 0
+          ? "No teammates use it yet."
+          : withAccess
+              .map((member) => {
+                const status = holders.get(member.recordId);
+                return status === undefined
+                  ? member.name
+                  : `${member.name} (${ACCESS_LABELS[status]})`;
+              })
+              .join(", ")}
+      </span>
+      {former.length > 0 ? (
+        <span className="text-xs text-destructive">
+          Former teammates still have access: {former.join(", ")}
+        </span>
+      ) : null}
+      {props.members.length > 0 || former.length > 0 ? (
+        <Menu>
+          <MenuTrigger render={<Button size="xs" variant="outline" className="mt-1 self-start" />}>
+            Manage access
+          </MenuTrigger>
+          <MenuPopup align="start">
+            {without.map((member) => (
+              <MenuItem key={member.recordId} onClick={() => setInviting(member)}>
+                Give {member.name} access
+              </MenuItem>
+            ))}
+            {without.length > 0 && withAccess.length > 0 ? <MenuSeparator /> : null}
+            {withAccess.map((member) => (
+              <MenuItem
+                key={member.recordId}
+                variant="destructive"
+                onClick={() => void removeAccess(member.recordId)}
+              >
+                Take away {member.name}'s access
+              </MenuItem>
+            ))}
+            {former.map((memberId) => (
+              <MenuItem
+                key={memberId}
+                variant="destructive"
+                onClick={() => void removeAccess(memberId)}
+              >
+                Take away {memberId}'s access
+              </MenuItem>
+            ))}
+          </MenuPopup>
+        </Menu>
+      ) : null}
+      {inviting !== null ? (
+        <InviteLinkDialog
+          environmentId={props.environmentId}
+          member={inviting}
+          onClose={() => setInviting(null)}
+        />
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Whether the company machine's agents can read this one, through a read-only link from the
+ * company machine. Linking mints the code here with the user's own session, so no code is typed.
+ */
+function AgentLink(props: {
+  readonly companyEnvironmentId: EnvironmentId;
+  readonly machine: CompanyMachine;
+}) {
+  const offered = useAtomValue(offersLinkedEnvironmentsAtom(props.companyEnvironmentId));
+  const linked = useLinkedEnvironments(props.companyEnvironmentId).has(props.machine.environmentId);
+  const canLink = useAtomValue(peerLinkEnvironment.link.permissionAtom(props.companyEnvironmentId));
+  const mayMint = useEnvironmentScope(props.machine.environmentId, AuthAccessWriteScope);
+  const linkable = useLinkableMachines(
+    props.companyEnvironmentId,
+    offered && canLink && mayMint && !linked,
+  ).find((candidate) => candidate.environmentId === props.machine.environmentId);
+  const link = useAtomCommand(peerLinkEnvironment.link, { label: "let agents see machine" });
+  const unlink = useAtomCommand(peerLinkEnvironment.unlink, {
+    label: "stop agents seeing machine",
+  });
+  const [busy, setBusy] = useState(false);
+
+  if (!offered) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        To let agents see its work, turn on Linked environments in Settings → Labs on both machines.
+      </span>
+    );
+  }
+  if (linked) {
+    return (
+      <span className="flex items-center gap-2 text-xs text-muted-foreground">
+        Agents on the company machine can see its work.
+        {canLink ? (
+          <Button
+            size="xs"
+            variant="ghost"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              const result = await unlink({
+                environmentId: props.companyEnvironmentId,
+                input: { environmentId: props.machine.environmentId },
+              });
+              setBusy(false);
+              if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+                errorToast("Could not stop sharing", String(squashAtomCommandFailure(result)));
+              }
+            }}
+          >
+            Stop
+          </Button>
+        ) : null}
+      </span>
+    );
+  }
+  const [url, ...alternateUrls] = linkable?.urls ?? [];
+  if (!canLink || !mayMint || url === undefined) {
+    return (
+      <span className="text-xs text-muted-foreground">
+        Agents can't see its work yet. An admin of both machines can let them.
+      </span>
+    );
+  }
+  return (
+    <Button
+      size="xs"
+      variant="outline"
+      className="mt-1 self-start"
+      disabled={busy}
+      onClick={async () => {
+        setBusy(true);
+        const code = await mintPairingCodeOn(props.machine.environmentId, "read-only");
+        const result = Result.isSuccess(code)
+          ? await link({
+              environmentId: props.companyEnvironmentId,
+              input: {
+                url,
+                ...(alternateUrls.length > 0 ? { alternateUrls } : {}),
+                expectedEnvironmentId: props.machine.environmentId,
+                expectedLabel: props.machine.name,
+                pairingCode: code.success,
+                access: "read-only",
+              },
+            })
+          : null;
+        setBusy(false);
+        if (result === null) {
+          errorToast("Could not let agents see it", "Could not get a pairing code from there.");
+        } else if (result._tag === "Failure" && !isAtomCommandInterrupted(result)) {
+          errorToast("Could not let agents see it", String(squashAtomCommandFailure(result)));
+        }
+      }}
+    >
+      Let agents see its work
+    </Button>
+  );
+}

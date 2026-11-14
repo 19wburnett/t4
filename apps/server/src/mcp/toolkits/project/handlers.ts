@@ -1,5 +1,6 @@
 import {
   CommandId,
+  companyFieldsOf,
   MessageId,
   ThreadId,
   OrchestratorMcpFailure,
@@ -241,6 +242,8 @@ export const layer = McpToolAccess.toLayer(ProjectToolkit, {
           createdBy: "agent",
           creationSource: "mcp",
           ...(linkOrigin === undefined ? {} : { linkOrigin }),
+          // A member's agent starts work for that member.
+          ...companyFieldsOf({ memberId: caller?.memberId }),
           // Kept only alongside linkOrigin: thread.create drops it otherwise.
           ...(input.delegatedFrom === undefined ? {} : { delegatedFrom: input.delegatedFrom }),
         }).pipe(

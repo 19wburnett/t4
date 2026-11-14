@@ -71,6 +71,7 @@ import {
   ThreadId,
   TurnItemId,
   TrimmedNonEmptyString,
+  companyFieldsOf,
 } from "@t3tools/contracts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { recordThreadOpen } from "@t3tools/shared/paletteSearch";
@@ -438,6 +439,15 @@ export interface OrchestratorV2Shape {
 export class OrchestratorV2 extends Context.Service<OrchestratorV2, OrchestratorV2Shape>()(
   "t3/orchestration-v2/Orchestrator/OrchestratorV2",
 ) {}
+
+/** A fork belongs to whoever forked it, not to whoever started the source. */
+function forkCompanyFields(
+  target: OrchestrationV2AppThread,
+  memberId: string | undefined,
+): OrchestrationV2AppThread {
+  const { memberId: _memberId, ...rest } = target;
+  return { ...rest, ...companyFieldsOf({ memberId }) };
+}
 
 /** Run ordinals can skip values: a queued run moves past newer runs when it starts. */
 function nextRunOrdinal(projection: Pick<OrchestrationV2ThreadProjection, "runs">): number {
@@ -2684,6 +2694,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       activeProviderThreadId: null,
       pullRequests: [],
       ...(command.linkOrigin === undefined ? {} : { linkOrigin: command.linkOrigin }),
+      ...companyFieldsOf(command),
       // Only stamped work names a remote parent, so a client cannot claim one.
       ...(command.linkOrigin === undefined || command.delegatedFrom === undefined
         ? {}
@@ -4352,7 +4363,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       threadId: command.targetThreadId,
       providerInstanceId: targetThread.providerInstanceId,
       occurredAt: now,
-      payload: targetThread,
+      payload: forkCompanyFields(targetThread, command.memberId),
     });
     yield* emitEvent({
       type: "context-transfer.created",

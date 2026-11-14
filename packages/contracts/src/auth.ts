@@ -386,6 +386,8 @@ export type AuthRevokeClientSessionInput = typeof AuthRevokeClientSessionInput.T
 export const AuthCreatePairingCredentialInput = Schema.Struct({
   label: Schema.optionalKey(TrimmedNonEmptyString),
   scopes: Schema.optionalKey(AuthGrantScopes),
+  /** Pair as this company member (a `members` brain record id) instead of as the owner. */
+  memberId: Schema.optionalKey(TrimmedNonEmptyString),
 });
 export type AuthCreatePairingCredentialInput = typeof AuthCreatePairingCredentialInput.Type;
 
@@ -396,8 +398,45 @@ export const AuthSessionState = Schema.Struct({
   permissions: authScopeResponseFields.permissions,
   sessionMethod: Schema.optionalKey(ServerAuthSessionMethod),
   expiresAt: Schema.optionalKey(Schema.DateTimeUtc),
+  /** Set when this session belongs to a company member rather than the owner. */
+  memberId: Schema.optionalKey(TrimmedNonEmptyString),
 });
 export type AuthSessionState = typeof AuthSessionState.Type;
+
+const COMPANY_MEMBER_SUBJECT_PREFIX = "member:";
+
+/** A member's sessions and pairing links carry `member:<id>` as their subject. */
+export const companyMemberSubject = (memberId: string) =>
+  `${COMPANY_MEMBER_SUBJECT_PREFIX}${memberId}`;
+
+export const companyMemberIdFromSubject = (subject: string): string | null =>
+  subject.startsWith(COMPANY_MEMBER_SUBJECT_PREFIX) &&
+  subject.length > COMPANY_MEMBER_SUBJECT_PREFIX.length
+    ? subject.slice(COMPANY_MEMBER_SUBJECT_PREFIX.length)
+    : null;
+
+/**
+ * What a member may do on a machine allocated to them: work in threads, files, terminals and
+ * previews, but not manage access, providers, settings or the environment itself.
+ */
+export const COMPANY_MEMBER_SCOPES: ReadonlyArray<AuthGrantScope> = [
+  AuthOrchestrationReadScope,
+  AuthOrchestrationOperateScope,
+  AuthFilesystemReadScope,
+  AuthFilesystemWriteScope,
+  AuthTerminalReadScope,
+  AuthTerminalOperateScope,
+  AuthPreviewOperateScope,
+  AuthSourceControlWriteScope,
+  AuthDiagnosticsReadScope,
+];
+
+/** An admin teammate also manages who has access, but not providers, settings or the server. */
+export const COMPANY_ADMIN_SCOPES: ReadonlyArray<AuthGrantScope> = [
+  ...COMPANY_MEMBER_SCOPES,
+  AuthAccessReadScope,
+  AuthAccessWriteScope,
+];
 
 export const AuthMcpClientAccess = Schema.Literals([
   "read-only",

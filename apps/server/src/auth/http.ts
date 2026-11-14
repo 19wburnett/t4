@@ -2,6 +2,7 @@ import {
   authScopeRequiredResponse,
   AuthAccessWriteScope,
   AuthStandardClientScopes,
+  COMPANY_MEMBER_SCOPES,
   AuthGrantScope,
   EnvironmentAuthInvalidError,
   type EnvironmentAuthInvalidReason,
@@ -444,7 +445,11 @@ export const layer = HttpApiBuilder.group(
           function* (args) {
             yield* annotateEnvironmentRequest(args.endpoint.name);
             const session = yield* requireEnvironmentScope(AuthAccessWriteScope);
-            const delegatedScopes = args.payload.scopes ?? AuthStandardClientScopes;
+            const delegatedScopes =
+              args.payload.scopes ??
+              (args.payload.memberId === undefined
+                ? AuthStandardClientScopes
+                : COMPANY_MEMBER_SCOPES);
             if (
               delegatedScopes.length === 0 ||
               new Set<AuthEnvironmentScope>(delegatedScopes).size !== delegatedScopes.length
@@ -456,7 +461,10 @@ export const layer = HttpApiBuilder.group(
                 return yield* failEnvironmentScopeRequired(delegatedScope);
               }
             }
-            return yield* serverAuth.issuePairingCredential(args.payload);
+            return yield* serverAuth.issuePairingCredential({
+              ...args.payload,
+              scopes: delegatedScopes,
+            });
           },
           Effect.catchIf(EnvironmentAuth.isServerAuthInternalError, (error) =>
             failEnvironmentInternal("pairing_credential_issuance_failed", error),

@@ -2,7 +2,11 @@
 import * as NodeCrypto from "node:crypto";
 
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import { authScopeResponse, AuthStandardClientScopes } from "@t3tools/contracts";
+import {
+  authScopeResponse,
+  AuthStandardClientScopes,
+  COMPANY_MEMBER_SCOPES,
+} from "@t3tools/contracts";
 import {
   computeDpopAccessTokenHash,
   computeDpopJwkThumbprint,
@@ -141,6 +145,40 @@ it.layer(NodeServices.layer)("EnvironmentAuth.layer", (it) => {
           devUrl: new URL("http://127.0.0.1:5173"),
           devAuthToken: Redacted.make("reusable-dev-auth-token-that-is-long-enough"),
         }),
+      ),
+    ),
+  );
+
+  it.effect("pairs a company member as themselves, with member scopes", () =>
+    Effect.gen(function* () {
+      const serverAuth = yield* EnvironmentAuth.EnvironmentAuth;
+      const sessions = yield* SessionStore.SessionStore;
+      const pairing = yield* serverAuth.issuePairingCredential({ memberId: "sam", label: "Sam" });
+      const exchanged = yield* serverAuth.createBrowserSession(pairing.credential, requestMetadata);
+      const request = {
+        cookies: { [sessions.cookieName]: exchanged.sessionToken },
+        headers: {},
+      } as never;
+
+      const authenticated = yield* serverAuth.authenticateHttpRequest(request);
+      expect(authenticated.subject).toBe("member:sam");
+      expect([...authenticated.scopes].toSorted()).toEqual([...COMPANY_MEMBER_SCOPES].toSorted());
+      const state = yield* serverAuth.getSessionState(request);
+      expect(state).toMatchObject({ authenticated: true, memberId: "sam" });
+
+      const owner = yield* serverAuth.issuePairingCredential({ scopes: ["orchestration:read"] });
+      const ownerExchange = yield* serverAuth.createBrowserSession(
+        owner.credential,
+        requestMetadata,
+      );
+      const ownerState = yield* serverAuth.getSessionState({
+        cookies: { [sessions.cookieName]: ownerExchange.sessionToken },
+        headers: {},
+      } as never);
+      expect(ownerState).not.toHaveProperty("memberId");
+    }).pipe(
+      Effect.provide(
+        layerEnvironmentAuth({ mode: "web", devUrl: new URL("http://127.0.0.1:5173") }),
       ),
     ),
   );

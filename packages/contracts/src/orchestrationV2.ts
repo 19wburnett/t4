@@ -120,6 +120,17 @@ export const OrchestrationV2LinkOrigin = Schema.Struct({
 export type OrchestrationV2LinkOrigin = typeof OrchestrationV2LinkOrigin.Type;
 
 /**
+ * The teammate whose session started a thread, a `company/members` record id; absent means the
+ * owner. Only the server sets it.
+ */
+const OrchestrationV2CompanyFields = {
+  memberId: Schema.optional(TrimmedNonEmptyString),
+} as const;
+
+export const companyFieldsOf = (source: { readonly memberId?: string | undefined }) =>
+  source.memberId === undefined ? {} : { memberId: source.memberId };
+
+/**
  * Work from a link paired below full access may change only work from the same
  * link. A full-access link's agents already run as this environment's user,
  * so fencing T3's own tools would stop nothing they could not do anyway. An
@@ -460,6 +471,7 @@ export const OrchestrationV2AppThread = Schema.Struct({
   activeProviderThreadId: Schema.NullOr(ProviderThreadId),
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
+  ...OrchestrationV2CompanyFields,
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
   bot: Schema.optional(OrchestrationV2ThreadBot),
   lineage: OrchestrationV2AppThreadLineage,
@@ -2080,6 +2092,7 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   activeProviderThreadId: Schema.NullOr(ProviderThreadId),
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
+  ...OrchestrationV2CompanyFields,
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
   bot: Schema.optional(OrchestrationV2ThreadBot),
   latestRunId: Schema.NullOr(RunId),
@@ -2907,6 +2920,7 @@ export const OrchestrationV2Command = Schema.Union([
     worktreePath: Schema.NullOr(TrimmedNonEmptyString),
     /** Only the server sets this; a client's thread.create never carries one. */
     linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
+    ...OrchestrationV2CompanyFields,
     /** Only the server sets this, with `linkOrigin`, for a linked environment's delegated task. */
     delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
     bot: Schema.optional(OrchestrationV2ThreadBot),
@@ -3283,6 +3297,8 @@ export const OrchestrationV2Command = Schema.Union([
     type: Schema.Literal("thread.fork"),
     ...OrchestrationV2CreationFields,
     commandId: CommandId,
+    /** Only the server sets this: the member whose session forked, who then owns the fork. */
+    memberId: Schema.optional(TrimmedNonEmptyString),
     sourceThreadId: ThreadId,
     targetThreadId: ThreadId,
     sourcePoint: OrchestrationV2ThreadForkSourcePoint,

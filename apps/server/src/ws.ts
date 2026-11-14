@@ -102,6 +102,9 @@ import {
   type PullRequestRef,
   WS_METHODS,
   WsRpcGroup,
+  AuthAccessWriteScope,
+  companyFieldsOf,
+  companyMemberIdFromSubject,
 } from "@t3tools/contracts";
 import {
   HttpRouter,
@@ -1235,8 +1238,29 @@ export const layerWsRpc = (
   Layer.effectContext(
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
+      const currentMemberId = companyMemberIdFromSubject(currentSession.subject) ?? undefined;
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+      // A teammate who can manage access is an admin here and may change anyone's threads.
+      const fencedMemberId = currentSession.scopes.includes(AuthAccessWriteScope)
+        ? undefined
+        : currentMemberId;
+      const assertMemberMayChange = (threadIds: ReadonlyArray<ThreadId>) =>
+        ThreadManagementService.assertMemberMayChange(
+          threadManagement.getThreadShell,
+          fencedMemberId,
+          threadIds,
+        );
+      // Work that runs as the owner, such as routines and imports, stays with the owner and admins.
+      const assertNotFencedMember = (what: string) =>
+        fencedMemberId === undefined
+          ? Effect.void
+          : Effect.fail(
+              new EnvironmentAuthorizationError({
+                message: `Teammates can't ${what}. Ask the owner or an admin.`,
+                requiredScope: AuthAccessWriteScope,
+              }),
+            );
       const intakeContext = yield* Effect.context<
         | ThreadManagementService.ThreadManagementService
         | ThreadLaunchService.ThreadLaunchService
@@ -1896,6 +1920,9 @@ export const layerWsRpc = (
               : {}),
           }).pipe(
             Effect.andThen(
+              assertMemberMayChange(ThreadManagementService.memberCommandThreadIds(command)),
+            ),
+            Effect.andThen(
               startup
                 .enqueueCommand(
                   (command.type === "prepared-run.retry"
@@ -1905,6 +1932,7 @@ export const layerWsRpc = (
                           createdBy: "user",
                           creationSource:
                             "creationSource" in command ? command.creationSource : "web",
+                          memberId: currentMemberId,
                         }),
                       )
                   ).pipe(Effect.provide(intakeContext)),
@@ -1927,9 +1955,14 @@ export const layerWsRpc = (
                 ),
             ),
           ),
-        [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) => threadManagement.stopWorkflow(input),
+        [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) =>
+          assertMemberMayChange([input.threadId]).pipe(
+            Effect.andThen(threadManagement.stopWorkflow(input)),
+          ),
         [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: (input) =>
-          threadManagement.forceStopThread(input),
+          assertMemberMayChange([input.threadId]).pipe(
+            Effect.andThen(threadManagement.forceStopThread(input)),
+          ),
         [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: (input) =>
           readWorkflowScript({ scriptPath: input.scriptPath }),
         [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: (input) =>
@@ -2047,6 +2080,13 @@ export const layerWsRpc = (
             "orchestration_v2.project_id": input.projectId,
           }).pipe(
             Effect.andThen(
+              assertMemberMayChange(
+                input.threadId === undefined || input.reuseExistingThread !== true
+                  ? []
+                  : [input.threadId],
+              ),
+            ),
+            Effect.andThen(
               startup
                 .enqueueCommand(
                   ThreadMessageIntake.launchThread({
@@ -2081,6 +2121,7 @@ export const layerWsRpc = (
                         }),
                     createdBy: "user",
                     creationSource: input.creationSource ?? "web",
+                    ...companyFieldsOf({ memberId: currentMemberId }),
                   }).pipe(Effect.provide(intakeContext)),
                 )
                 .pipe(
@@ -2155,21 +2196,28 @@ export const layerWsRpc = (
           ),
         [WS_METHODS.scheduledTasksSubscribe]: (_input) =>
           scheduledTasks.subscribeList().pipe(Stream.map(withVisibleWebhookUrls)),
-        [WS_METHODS.scheduledTasksUpsert]: (input) => scheduledTasks.upsert(input),
+        [WS_METHODS.scheduledTasksUpsert]: (input) =>
+          assertNotFencedMember("manage routines").pipe(
+            Effect.andThen(scheduledTasks.upsert(input)),
+          ),
         [WS_METHODS.scheduledTasksSetEnabled]: (input) =>
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
+            Effect.andThen(assertNotFencedMember("manage routines")),
             Effect.andThen(scheduledTasks.setEnabled(input)),
           ),
         [WS_METHODS.scheduledTasksDelete]: (input) =>
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
+            Effect.andThen(assertNotFencedMember("manage routines")),
             Effect.andThen(scheduledTasks.delete(input)),
           ),
         [WS_METHODS.scheduledTasksRunNow]: (input) =>
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
+            Effect.andThen(assertNotFencedMember("run routines")),
             Effect.andThen(scheduledTasks.runNow(input)),
           ),
         [WS_METHODS.scheduledTasksRotateWebhookToken]: (input) =>
           Effect.annotateCurrentSpan({ "scheduled_task.id": input.id }).pipe(
+            Effect.andThen(assertNotFencedMember("manage routines")),
             Effect.andThen(scheduledTasks.rotateWebhookToken(input)),
           ),
         [WS_METHODS.guestShareCreate]: (input) =>
@@ -2178,6 +2226,7 @@ export const layerWsRpc = (
           ),
         [WS_METHODS.secretsAnswerRequest]: (input) =>
           Effect.annotateCurrentSpan({ "orchestration_v2.thread_id": input.threadId }).pipe(
+            Effect.andThen(assertMemberMayChange([input.threadId])),
             Effect.andThen(secretRequests.answer(input)),
           ),
         [WS_METHODS.browserCredentialsList]: () => browserCredentials.list,
@@ -2794,13 +2843,18 @@ export const layerWsRpc = (
               ),
             ),
         [WS_METHODS.projectsCreateFromThread]: (input) =>
-          scratchThreadPromotion
-            .promote(input)
-            .pipe(
-              Effect.mapError(
-                (cause) => new OrchestrationDispatchCommandError({ message: cause.message, cause }),
-              ),
+          assertMemberMayChange([input.threadId]).pipe(
+            Effect.andThen(
+              scratchThreadPromotion
+                .promote(input)
+                .pipe(
+                  Effect.mapError(
+                    (cause) =>
+                      new OrchestrationDispatchCommandError({ message: cause.message, cause }),
+                  ),
+                ),
             ),
+          ),
         [WS_METHODS.projectCloneCancel]: (input) =>
           projectCloneTracker.cancel(input.projectId).pipe(Effect.map((applied) => ({ applied }))),
         [WS_METHODS.projectCloneRetry]: (input) =>
@@ -2883,17 +2937,24 @@ export const layerWsRpc = (
             ),
           ),
         [WS_METHODS.projectsMutate]: (mutation) =>
-          startup.enqueueCommand(mutateProject(mutation)).pipe(
-            Effect.mapError(
-              (cause) =>
-                new ProjectMutationError({
-                  commandId: mutation.commandId,
-                  message:
-                    cause._tag === "ProjectNotEmptyError"
-                      ? cause.message
-                      : "Failed to mutate project.",
-                  cause,
-                }),
+          (mutation.type === "project.delete" && mutation.force === true
+            ? assertNotFencedMember("delete a project with everyone's threads in it")
+            : Effect.void
+          ).pipe(
+            Effect.andThen(
+              startup.enqueueCommand(mutateProject(mutation)).pipe(
+                Effect.mapError(
+                  (cause) =>
+                    new ProjectMutationError({
+                      commandId: mutation.commandId,
+                      message:
+                        cause._tag === "ProjectNotEmptyError"
+                          ? cause.message
+                          : "Failed to mutate project.",
+                      cause,
+                    }),
+                ),
+              ),
             ),
           ),
         [WS_METHODS.shellOpenInEditor]: (input) => externalLauncher.launchEditor(input),
@@ -2913,7 +2974,9 @@ export const layerWsRpc = (
         [WS_METHODS.attachmentsDelete]: (input) => deletePendingAttachment(input.attachmentId),
         [WS_METHODS.agentSessionsScan]: () => agentSessionScanner.scan,
         [WS_METHODS.agentSessionsImport]: (input) =>
-          agentSessionImporter.importRecentAgentThreads(input),
+          assertNotFencedMember("import agent sessions").pipe(
+            Effect.andThen(agentSessionImporter.importRecentAgentThreads(input)),
+          ),
         [WS_METHODS.assetsCreateUrl]:
           /* Request instrumentation already owns the span; keep this helper in that context. */
           Effect.fnUntraced(function* (input) {
@@ -3000,9 +3063,10 @@ export const layerWsRpc = (
         [WS_METHODS.subscribeVcsStatus]: (input) => vcsStatusBroadcaster.streamStatus(input),
         [WS_METHODS.subscribeWorktreeSetup]: (input) => worktreeSetupTracker.stream(input.threadId),
         [WS_METHODS.worktreeSetupCancel]: (input) =>
-          worktreeSetupTracker
-            .cancel(input.threadId)
-            .pipe(Effect.map((cancelled) => ({ cancelled }))),
+          assertMemberMayChange([input.threadId]).pipe(
+            Effect.andThen(worktreeSetupTracker.cancel(input.threadId)),
+            Effect.map((cancelled) => ({ cancelled })),
+          ),
         [WS_METHODS.vcsRefreshStatus]: (input) =>
           vcsStatusBroadcaster.refreshStatus(input.cwd, { localOnly: input.localOnly ?? false }),
         [WS_METHODS.vcsPull]: (input) =>

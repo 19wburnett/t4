@@ -1,6 +1,7 @@
 import { CompanyBrainRecordId, pendingGuestMessageCount } from "@t3tools/contracts";
 import { applyThreadPullRequestLinkUpdate } from "../sourceControl/threadPullRequests.ts";
 import { projectTurnItemForWire } from "./WireProjection.ts";
+import { companyFieldsOf } from "@t3tools/contracts";
 import * as Stream from "effect/Stream";
 import * as NodeSqliteClient from "@t3tools/shared/nodeSqliteClient";
 import { makeThreadFind } from "./ThreadFind.ts";
@@ -1523,6 +1524,7 @@ export function threadShellFromProjection(
     ...(projection.thread.linkOrigin === undefined
       ? {}
       : { linkOrigin: projection.thread.linkOrigin }),
+    ...companyFieldsOf(projection.thread),
     ...(projection.thread.delegatedFrom === undefined
       ? {}
       : { delegatedFrom: projection.thread.delegatedFrom }),
@@ -1805,6 +1807,7 @@ function shellFromState(input: {
     ...(input.state.thread.linkOrigin === undefined
       ? {}
       : { linkOrigin: input.state.thread.linkOrigin }),
+    ...companyFieldsOf(input.state.thread),
     ...(input.state.thread.delegatedFrom === undefined
       ? {}
       : { delegatedFrom: input.state.thread.delegatedFrom }),

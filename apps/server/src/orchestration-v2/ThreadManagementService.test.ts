@@ -1,6 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import {
   CommandId,
+  CompanyBrainRecordId,
   EnvironmentId,
   MessageId,
   type OrchestrationV2Command,
@@ -10,6 +11,7 @@ import {
   ProviderDriverKind,
   ProviderSessionId,
   type OrchestrationV2StoredEvent,
+  type OrchestrationV2ThreadShell,
   type OrchestrationV2ThreadProjection,
   ProjectId,
   ProviderInstanceId,
@@ -62,6 +64,9 @@ it("stamps authoritative provenance on commands that create threads or messages"
       threadId: ThreadId.make("thread:elsewhere"),
       title: "Somewhere else",
     },
+    // Nor claim to be a teammate; the AI employee is the client's to name.
+    memberId: "forged-member",
+    bot: CompanyBrainRecordId.make("marketer"),
   };
 
   const stamped = ThreadManagementService.withCreationProvenance(command, {
@@ -71,10 +76,77 @@ it("stamps authoritative provenance on commands that create threads or messages"
   expect(stamped).toMatchObject({
     createdBy: "user",
     creationSource: "web",
+    bot: "marketer",
   });
   expect(stamped).not.toHaveProperty("linkOrigin");
   expect(stamped).not.toHaveProperty("delegatedFrom");
+  expect(stamped).not.toHaveProperty("memberId");
+
+  const byMember = ThreadManagementService.withCreationProvenance(command, {
+    createdBy: "user",
+    creationSource: "web",
+    memberId: "sam",
+  });
+  expect(byMember).toMatchObject({ memberId: "sam", bot: "marketer" });
+  const fork = ThreadManagementService.withCreationProvenance(
+    {
+      type: "thread.fork",
+      createdBy: "user",
+      creationSource: "web",
+      commandId: CommandId.make("command:thread-management:fork"),
+      sourceThreadId: ThreadId.make("thread:thread-management:create"),
+      targetThreadId: ThreadId.make("thread:thread-management:fork"),
+      sourcePoint: { type: "latest_stable" },
+      memberId: "forged-member",
+    },
+    { createdBy: "user", creationSource: "web", memberId: "sam" },
+  );
+  expect(fork).toMatchObject({ memberId: "sam" });
 });
+
+it.effect("lets a member change only the threads they started, and fork any", () =>
+  Effect.gen(function* () {
+    const owners: Record<string, string | undefined> = {
+      "thread:mine": "sam",
+      "thread:theirs": "alex",
+      "thread:owner": undefined,
+    };
+    const getThreadShell = (threadId: ThreadId) =>
+      Effect.succeed(
+        threadId in owners
+          ? ({
+              id: threadId,
+              ...(owners[threadId] === undefined ? {} : { memberId: owners[threadId] }),
+            } as OrchestrationV2ThreadShell)
+          : null,
+      );
+    const check = (memberId: string | undefined, threadIds: ReadonlyArray<string>) =>
+      ThreadManagementService.assertMemberMayChange(
+        getThreadShell,
+        memberId,
+        threadIds.map((id) => ThreadId.make(id)),
+      ).pipe(
+        Effect.as("allowed"),
+        Effect.catchTags({ EnvironmentAuthorizationError: () => Effect.succeed("denied") }),
+      );
+
+    expect(yield* check("sam", ["thread:mine", "thread:new"])).toBe("allowed");
+    expect(yield* check("sam", ["thread:theirs"])).toBe("denied");
+    expect(yield* check("sam", ["thread:owner"])).toBe("denied");
+    expect(yield* check(undefined, ["thread:theirs", "thread:mine"])).toBe("allowed");
+    expect(
+      ThreadManagementService.memberCommandThreadIds({
+        type: "thread.fork",
+        createdBy: "user",
+        creationSource: "web",
+        commandId: CommandId.make("command:thread-management:fork-check"),
+        sourceThreadId: ThreadId.make("thread:theirs"),
+        targetThreadId: ThreadId.make("thread:fork"),
+        sourcePoint: { type: "latest_stable" },
+      }),
+    ).toEqual([]);
+  }),
+);
 
 const layerReceiptsTest = CommandReceiptStore.layer.pipe(
   Layer.provide(SqlitePersistence.layerMemory),

@@ -4,6 +4,8 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
+  CompanyBrainRecordId,
+  companyFieldsOf,
   ContextTransferId,
   EnvironmentId,
   NodeId,
@@ -97,6 +99,7 @@ const layerLaunches = Layer.effect(
             worktreePath: null,
             ...(input.linkOrigin === undefined ? {} : { linkOrigin: input.linkOrigin }),
             ...(input.delegatedFrom === undefined ? {} : { delegatedFrom: input.delegatedFrom }),
+            ...companyFieldsOf(input),
             createdBy: input.createdBy,
             creationSource: input.creationSource,
           })
@@ -407,6 +410,54 @@ it.layer(Layer.provideMerge(layerTools, layerOrchestration))("work a link starts
         const changed = yield* call(trusted, name, args);
         assert.equal(changed.isError, false, `${name}: ${JSON.stringify(changed.content)}`);
       }
+    }),
+  );
+
+  it.effect("keeps who started a teammate's thread, and its subagents", () =>
+    Effect.gen(function* () {
+      const projections = yield* ProjectionStore.ProjectionStoreV2;
+      const threads = yield* ThreadManagement.ThreadManagementService;
+      const samsThreadId = ThreadId.make("thread:sams");
+      yield* threads.dispatch(
+        ThreadManagement.withCreationProvenance(
+          {
+            type: "thread.create",
+            commandId: CommandId.make("create:sams"),
+            threadId: samsThreadId,
+            projectId,
+            title: "Sam's",
+            modelSelection: { instanceId, model: "gpt-5" },
+            runtimeMode: "auto",
+            interactionMode: "default",
+            branch: null,
+            worktreePath: null,
+            bot: CompanyBrainRecordId.make("marketer"),
+            createdBy: "user",
+            creationSource: "web",
+          },
+          { createdBy: "user", creationSource: "web", memberId: "sam" },
+        ),
+      );
+      const shell = yield* projections.getThreadShell(samsThreadId);
+      assert.deepEqual(companyFieldsOf(shell ?? {}), { memberId: "sam" });
+      assert.equal(shell?.bot, "marketer");
+
+      const thread = (yield* threads.getThreadProjection(samsThreadId)).thread;
+      const child = makeSubagentChildThread({
+        parentThread: thread,
+        childThreadId: ThreadId.make("thread:sams-child"),
+        parentNodeId: NodeId.make("node:sams-child"),
+        activeProviderThreadId: null,
+        providerInstanceId: instanceId,
+        modelSelection: { instanceId, model: "gpt-5" },
+        title: "Child",
+        now: thread.createdAt,
+        createdBy: "agent",
+        creationSource: "mcp",
+      });
+      // The member carries over to subagents; the bot does not.
+      assert.deepEqual(companyFieldsOf(child), { memberId: "sam" });
+      assert.equal(child.bot, undefined);
     }),
   );
 });

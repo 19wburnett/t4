@@ -27,6 +27,18 @@ model. DPoP binds a token to a client's proof key; an invalid proof must fail
 rather than fall back to bearer authentication. The OAuth token-exchange
 vocabulary gives these grants a familiar meaning.
 
+### Company members are a subject, not a scope
+
+A pairing link minted with a `memberId` carries the subject `member:<id>`, and
+so does every session it becomes. The subject is the carrier because it is
+stored with the session and survives WebSocket tickets; a signed claim alone
+would not. The WebSocket handlers stamp that member on threads it creates or
+forks and refuse its commands on other people's threads
+([`assertMemberMayChange`](../../apps/server/src/orchestration-v2/ThreadManagementService.ts)).
+A member who holds `access:write` is an admin and is not held to its own
+threads. This is coordination, not a sandbox: a member's terminals and agents
+run as this environment's user.
+
 ### Guest links are not sessions
 
 A [guest link](../user/guest-links.md) gives one browser read access to one

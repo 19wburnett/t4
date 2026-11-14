@@ -126,7 +126,7 @@ export interface Employee {
   readonly providerLabel: string;
 }
 
-const textField = (fields: CompanyBrainFields, key: string): string => {
+export const textField = (fields: CompanyBrainFields, key: string): string => {
   const value = fields[key];
   return typeof value === "string" ? value.trim() : "";
 };
