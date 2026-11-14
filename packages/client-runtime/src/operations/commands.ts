@@ -155,6 +155,8 @@ interface StartThreadBootstrap {
     readonly branch: string | null;
     readonly worktreePath: string | null;
     readonly createdAt: string;
+    /** The AI employee (a `company/agents` record id) the new thread works as. */
+    readonly employeeId?: string;
   };
   readonly prepareWorktree?: {
     readonly requireWorktree?: boolean;
@@ -721,6 +723,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       runtimeMode: input.runtimeMode,
       interactionMode: input.interactionMode,
       workspaceStrategy,
+      ...(bootstrap?.employeeId === undefined ? {} : { employeeId: bootstrap.employeeId }),
       initialMessage: {
         messageId: input.message.messageId,
         text: input.message.text,

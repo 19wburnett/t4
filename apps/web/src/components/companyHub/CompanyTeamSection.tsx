@@ -278,6 +278,7 @@ function AskEmployeeDialog(props: {
       { environmentId: props.environmentId, id: props.projectId },
       buildEmployeePrompt(props.employee, instructions, task),
       employeeTargetOf(props.employee.provider),
+      { employeeId: props.employee.recordId },
     );
     props.onClose();
   };

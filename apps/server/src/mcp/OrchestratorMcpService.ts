@@ -1,5 +1,6 @@
 import {
   CommandId,
+  companyFieldsOf,
   type RunId,
   isProviderAvailable,
   MessageId,
@@ -2720,6 +2721,7 @@ const make = Effect.gen(function* () {
                   ...(parent.thread.linkOrigin === undefined
                     ? {}
                     : { linkOrigin: parent.thread.linkOrigin }),
+                  ...companyFieldsOf(parent.thread),
                 })
                 .pipe(
                   Effect.mapError((error) =>

@@ -56,6 +56,31 @@ instructions. **Ask for work** starts a thread as that employee, with its
 instructions and the company brain. Change how someone works by editing their
 record under **Company brain → Team**.
 
+## People
+
+**Invite** under **People** in Settings → Company adds a teammate to
+`company/members/` and gives you a one-use link to send them. Opening it signs
+their browser in to this machine as them, so their threads show who started
+them. Their browser has to reach this machine, for example over Tailscale.
+
+A **Member** can see everyone's work and change only the threads they start;
+they can fork anyone's thread to continue it as their own. An **Admin** can also
+invite people and change anyone's thread. Neither can change providers,
+settings, or who has access. Both run agents and terminals as this machine's
+user, so invite people you trust with it.
+
+**New invite link** makes another link when one expires or was used up.
+**Remove from company** signs them out of this machine, cancels unused links,
+and deletes their record. Their threads stay.
+
+## Activity
+
+**Activity** shows what everyone on this machine is doing, one view at a time:
+**Everyone** has a card per person and AI employee; click one to see their
+threads. **People**, **AI employees**, and **Projects** list the threads for
+the one you pick. Agents see the same views with `t3_team_activity`, so they
+can check for overlapping work before they start.
+
 ## Routines
 
 **Add routine** under **Routines** creates a scheduled task for work that repeats:

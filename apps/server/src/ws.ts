@@ -101,6 +101,9 @@ import {
   type PullRequestRef,
   WS_METHODS,
   WsRpcGroup,
+  AuthAccessWriteScope,
+  companyFieldsOf,
+  companyMemberIdFromSubject,
 } from "@t3tools/contracts";
 import {
   HttpRouter,
@@ -1234,8 +1237,19 @@ export const layerWsRpc = (
   Layer.effectContext(
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
+      const currentMemberId = companyMemberIdFromSubject(currentSession.subject) ?? undefined;
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* ThreadManagementService.ThreadManagementService;
+      // A teammate who can manage access is an admin here and may change anyone's threads.
+      const fencedMemberId = currentSession.scopes.includes(AuthAccessWriteScope)
+        ? undefined
+        : currentMemberId;
+      const assertMemberMayChange = (threadIds: ReadonlyArray<ThreadId>) =>
+        ThreadManagementService.assertMemberMayChange(
+          threadManagement.getThreadShell,
+          fencedMemberId,
+          threadIds,
+        );
       const intakeContext = yield* Effect.context<
         | ThreadManagementService.ThreadManagementService
         | ThreadLaunchService.ThreadLaunchService
@@ -1894,6 +1908,9 @@ export const layerWsRpc = (
               : {}),
           }).pipe(
             Effect.andThen(
+              assertMemberMayChange(ThreadManagementService.memberCommandThreadIds(command)),
+            ),
+            Effect.andThen(
               startup
                 .enqueueCommand(
                   (command.type === "prepared-run.retry"
@@ -1903,6 +1920,7 @@ export const layerWsRpc = (
                           createdBy: "user",
                           creationSource:
                             "creationSource" in command ? command.creationSource : "web",
+                          memberId: currentMemberId,
                         }),
                       )
                   ).pipe(Effect.provide(intakeContext)),
@@ -1925,9 +1943,14 @@ export const layerWsRpc = (
                 ),
             ),
           ),
-        [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) => threadManagement.stopWorkflow(input),
+        [ORCHESTRATION_V2_WS_METHODS.stopWorkflow]: (input) =>
+          assertMemberMayChange([input.threadId]).pipe(
+            Effect.andThen(threadManagement.stopWorkflow(input)),
+          ),
         [ORCHESTRATION_V2_WS_METHODS.forceStopThread]: (input) =>
-          threadManagement.forceStopThread(input),
+          assertMemberMayChange([input.threadId]).pipe(
+            Effect.andThen(threadManagement.forceStopThread(input)),
+          ),
         [ORCHESTRATION_V2_WS_METHODS.getWorkflowScript]: (input) =>
           readWorkflowScript({ scriptPath: input.scriptPath }),
         [ORCHESTRATION_V2_WS_METHODS.getTurnItem]: (input) =>
@@ -2045,6 +2068,13 @@ export const layerWsRpc = (
             "orchestration_v2.project_id": input.projectId,
           }).pipe(
             Effect.andThen(
+              assertMemberMayChange(
+                input.threadId === undefined || input.reuseExistingThread !== true
+                  ? []
+                  : [input.threadId],
+              ),
+            ),
+            Effect.andThen(
               startup
                 .enqueueCommand(
                   ThreadMessageIntake.launchThread({
@@ -2078,6 +2108,10 @@ export const layerWsRpc = (
                         }),
                     createdBy: "user",
                     creationSource: input.creationSource ?? "web",
+                    ...companyFieldsOf({
+                      memberId: currentMemberId,
+                      employeeId: input.employeeId,
+                    }),
                   }).pipe(Effect.provide(intakeContext)),
                 )
                 .pipe(

@@ -48,6 +48,8 @@ import { CompanyInboxSection } from "./CompanyInboxSection";
 import { CompanyOutboxSection } from "./CompanyOutboxSection";
 import { CompanyRoutinesSection } from "./CompanyRoutinesSection";
 import { CompanyTeamSection } from "./CompanyTeamSection";
+import { CompanyActivitySection } from "./CompanyActivitySection";
+import { CompanyPeopleSection } from "./CompanyPeopleSection";
 import { useStartWorkThread } from "./useStartWorkThread";
 
 const LANE_THREAD_LIMIT = 8;
@@ -87,6 +89,12 @@ export function CompanyHub({ group }: { group: SidebarProjectSnapshot }) {
           ))}
         </div>
       </section>
+      {canReadChannels ? (
+        <CompanyActivitySection environmentId={primary.environmentId} projectId={primary.id} />
+      ) : null}
+      {canReadChannels ? (
+        <CompanyPeopleSection environmentId={primary.environmentId} projectId={primary.id} />
+      ) : null}
       {canReadChannels ? (
         <CompanyTeamSection environmentId={primary.environmentId} projectId={primary.id} />
       ) : null}

@@ -124,6 +124,24 @@ export type OrchestrationV2LinkOrigin = typeof OrchestrationV2LinkOrigin.Type;
  * so fencing T3's own tools would stop nothing they could not do anyway. An
  * origin stamped before access was recorded stays fenced.
  */
+/**
+ * Who in the company a thread is for. `memberId` is the teammate whose session started it
+ * (absent: the owner); only the server sets it. `employeeId` is the AI employee doing the work.
+ * Both are `company/` brain record ids.
+ */
+const OrchestrationV2CompanyFields = {
+  memberId: Schema.optional(TrimmedNonEmptyString),
+  employeeId: Schema.optional(TrimmedNonEmptyString),
+} as const;
+
+export const companyFieldsOf = (source: {
+  readonly memberId?: string | undefined;
+  readonly employeeId?: string | undefined;
+}) => ({
+  ...(source.memberId === undefined ? {} : { memberId: source.memberId }),
+  ...(source.employeeId === undefined ? {} : { employeeId: source.employeeId }),
+});
+
 export const linkOriginIsFenced = (origin: OrchestrationV2LinkOrigin) =>
   origin.access !== "full-access";
 
@@ -455,6 +473,7 @@ export const OrchestrationV2AppThread = Schema.Struct({
   activeProviderThreadId: Schema.NullOr(ProviderThreadId),
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
+  ...OrchestrationV2CompanyFields,
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
   lineage: OrchestrationV2AppThreadLineage,
   forkedFrom: Schema.NullOr(
@@ -2074,6 +2093,7 @@ export const OrchestrationV2ThreadShell = Schema.Struct({
   activeProviderThreadId: Schema.NullOr(ProviderThreadId),
   historyOrigin: Schema.optional(OrchestrationV2ThreadHistoryOrigin),
   linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
+  ...OrchestrationV2CompanyFields,
   delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
   latestRunId: Schema.NullOr(RunId),
   latestRunRequestedAt: Schema.optional(Schema.NullOr(Schema.DateTimeUtc)),
@@ -2900,6 +2920,7 @@ export const OrchestrationV2Command = Schema.Union([
     worktreePath: Schema.NullOr(TrimmedNonEmptyString),
     /** Only the server sets this; a client's thread.create never carries one. */
     linkOrigin: Schema.optional(OrchestrationV2LinkOrigin),
+    ...OrchestrationV2CompanyFields,
     /** Only the server sets this, with `linkOrigin`, for a linked environment's delegated task. */
     delegatedFrom: Schema.optional(OrchestrationV2DelegatedFrom),
     importedNativeThread: Schema.optional(
@@ -3275,6 +3296,8 @@ export const OrchestrationV2Command = Schema.Union([
     type: Schema.Literal("thread.fork"),
     ...OrchestrationV2CreationFields,
     commandId: CommandId,
+    /** Only the server sets this: the member whose session forked, who then owns the fork. */
+    memberId: Schema.optional(TrimmedNonEmptyString),
     sourceThreadId: ThreadId,
     targetThreadId: ThreadId,
     sourcePoint: OrchestrationV2ThreadForkSourcePoint,
@@ -3615,6 +3638,7 @@ export const OrchestrationV2ThreadLaunchInput = Schema.Struct({
   runtimeMode: RuntimeMode,
   interactionMode: ProviderInteractionMode,
   workspaceStrategy: OrchestrationV2ThreadLaunchWorkspaceStrategy,
+  employeeId: Schema.optional(TrimmedNonEmptyString),
   initialMessage: Schema.optional(
     Schema.Struct({
       messageId: Schema.optional(MessageId),

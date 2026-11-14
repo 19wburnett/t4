@@ -14,6 +14,7 @@ export function useStartWorkThread() {
     project: { readonly environmentId: EnvironmentId; readonly id: ProjectId },
     prompt: string,
     target: WorkTaskTarget,
+    options?: { readonly employeeId?: string },
   ) => {
     const opened = await handleNewThread(scopeProjectRef(project.environmentId, project.id), {
       prompt,
@@ -21,6 +22,11 @@ export function useStartWorkThread() {
     if (opened === null) {
       toastManager.add({ type: "error", title: "Could not start a new thread" });
       return;
+    }
+    if (options?.employeeId !== undefined) {
+      useComposerDraftStore
+        .getState()
+        .setDraftThreadContext(opened.draftId, { employeeId: options.employeeId });
     }
     const providers =
       appAtomRegistry

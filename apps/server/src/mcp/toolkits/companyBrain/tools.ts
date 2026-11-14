@@ -7,6 +7,7 @@ import {
   CompanyBrainRecordSummary,
   OrchestratorMcpFailure,
   ProjectId,
+  ThreadId,
   TrimmedNonEmptyString,
 } from "@t3tools/contracts";
 import * as Schema from "effect/Schema";
@@ -75,4 +76,46 @@ const CompanyBrainSaveTool = Tool.make("t3_brain_save", {
   }),
 }).annotate(Tool.Destructive, false);
 
-export const CompanyBrainToolkit = Toolkit.make(CompanyBrainFindTool, CompanyBrainSaveTool);
+export const TeamActivityView = Schema.Literals(["everyone", "person", "employee", "project"]);
+
+const TeamActivityThread = Schema.Struct({
+  threadId: ThreadId,
+  title: Schema.String,
+  projectId: ProjectId,
+  status: Schema.String,
+  waitingOn: Schema.NullOr(Schema.Literals(["approval", "answer"])),
+  startedBy: Schema.String,
+  employee: Schema.NullOr(Schema.String),
+  updatedAt: Schema.String,
+});
+
+const TeamActivityTool = Tool.make("t3_team_activity", {
+  ...shared,
+  description:
+    "See what the people and AI employees on this machine are working on, one view at a time. everyone: each person and employee with their latest threads. person: one teammate's threads (memberId; omit for the owner). employee: one AI employee's threads (employeeId). project: everyone's threads in workProjectId. Check before starting work that could overlap someone else's; read a thread with t3_thread_read.",
+  parameters: Schema.Struct({
+    projectId,
+    view: TeamActivityView,
+    memberId: Schema.optional(TrimmedNonEmptyString),
+    employeeId: Schema.optional(TrimmedNonEmptyString),
+    workProjectId: Schema.optional(ProjectId),
+    limit: Schema.optional(Schema.Int.check(Schema.isBetween({ minimum: 1, maximum: 50 }))),
+  }),
+  success: Schema.Struct({
+    groups: Schema.Array(
+      Schema.Struct({
+        kind: Schema.Literals(["owner", "member", "employee", "project"]),
+        id: Schema.NullOr(Schema.String),
+        name: Schema.String,
+        active: Schema.Int,
+        threads: Schema.Array(TeamActivityThread),
+      }),
+    ),
+  }),
+}).annotate(Tool.Destructive, false);
+
+export const CompanyBrainToolkit = Toolkit.make(
+  CompanyBrainFindTool,
+  CompanyBrainSaveTool,
+  TeamActivityTool,
+);

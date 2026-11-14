@@ -71,6 +71,7 @@ import {
   ThreadId,
   TurnItemId,
   TrimmedNonEmptyString,
+  companyFieldsOf,
 } from "@t3tools/contracts";
 import { modelSelectionsEqual } from "@t3tools/shared/model";
 import { recordThreadOpen } from "@t3tools/shared/paletteSearch";
@@ -440,6 +441,16 @@ export class OrchestratorV2 extends Context.Service<OrchestratorV2, Orchestrator
 ) {}
 
 /** Run ordinals can skip values: a queued run moves past newer runs when it starts. */
+/** A fork belongs to whoever forked it and keeps the source's AI employee. */
+function forkCompanyFields(
+  target: OrchestrationV2AppThread,
+  source: Pick<OrchestrationV2AppThread, "employeeId">,
+  memberId: string | undefined,
+): OrchestrationV2AppThread {
+  const { memberId: _memberId, employeeId: _employeeId, ...rest } = target;
+  return { ...rest, ...companyFieldsOf({ memberId, employeeId: source.employeeId }) };
+}
+
 function nextRunOrdinal(projection: Pick<OrchestrationV2ThreadProjection, "runs">): number {
   return projection.runs.reduce((max, run) => Math.max(max, run.ordinal), 0) + 1;
 }
@@ -2684,6 +2695,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       activeProviderThreadId: null,
       pullRequests: [],
       ...(command.linkOrigin === undefined ? {} : { linkOrigin: command.linkOrigin }),
+      ...companyFieldsOf(command),
       // Only stamped work names a remote parent, so a client cannot claim one.
       ...(command.linkOrigin === undefined || command.delegatedFrom === undefined
         ? {}
@@ -4351,7 +4363,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       threadId: command.targetThreadId,
       providerInstanceId: targetThread.providerInstanceId,
       occurredAt: now,
-      payload: targetThread,
+      payload: forkCompanyFields(targetThread, sourceProjection.thread, command.memberId),
     });
     yield* emitEvent({
       type: "context-transfer.created",

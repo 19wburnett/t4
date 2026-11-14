@@ -3,6 +3,7 @@ import * as ProjectCloneTracker from "../project/ProjectCloneTracker.ts";
 import * as TerminalManager from "../terminal/Manager.ts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
+  companyFieldsOf,
   CommandId,
   type ChatAttachment,
   type MessageId,
@@ -103,6 +104,9 @@ export interface ThreadLaunchInput {
   readonly linkOrigin?: OrchestrationV2LinkOrigin;
   /** The parent there, when that environment's agent delegated this as a task. */
   readonly delegatedFrom?: OrchestrationV2DelegatedFrom;
+  /** The company member this launch is for; only the server sets it. */
+  readonly memberId?: string;
+  readonly employeeId?: string;
 }
 
 type PreparationInput = Pick<
@@ -920,6 +924,7 @@ const make = Effect.gen(function* () {
                 ...(input.delegatedFrom === undefined
                   ? {}
                   : { delegatedFrom: input.delegatedFrom }),
+                ...companyFieldsOf(input),
                 createdBy: input.createdBy,
                 creationSource: input.creationSource,
               });

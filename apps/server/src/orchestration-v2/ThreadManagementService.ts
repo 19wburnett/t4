@@ -10,7 +10,10 @@ import type {
 } from "./ProjectionStore.ts";
 import {
   type ChatAttachment,
+  AuthOrchestrationOperateScope,
   CommandId,
+  companyFieldsOf,
+  EnvironmentAuthorizationError,
   isListedThreadLineage,
   MessageId,
   OrchestrationV2StopWorkflowError,
@@ -72,26 +75,71 @@ export type ThreadManagementSendMode = "auto" | "queue" | "steer" | "restart";
 export interface ThreadManagementProvenance {
   readonly createdBy: OrchestrationV2Actor;
   readonly creationSource: OrchestrationV2CreationSource;
+  /** The company member whose session sent the command; absent for the owner. */
+  readonly memberId?: string | undefined;
 }
 
 export function withCreationProvenance(
   command: OrchestrationV2Command,
   provenance: ThreadManagementProvenance,
 ): OrchestrationV2Command {
+  const { memberId, ...creation } = provenance;
   switch (command.type) {
     case "thread.create": {
-      // Only the server stamps a link's origin, so a client cannot set one.
-      const { linkOrigin: _linkOrigin, delegatedFrom: _delegatedFrom, ...rest } = command;
-      return { ...rest, ...provenance };
+      // Only the server stamps a link's origin or a member, so a client cannot set one.
+      const {
+        linkOrigin: _linkOrigin,
+        delegatedFrom: _delegatedFrom,
+        memberId: _memberId,
+        ...rest
+      } = command;
+      return { ...rest, ...creation, ...companyFieldsOf({ memberId }) };
+    }
+    case "thread.fork": {
+      const { memberId: _memberId, ...rest } = command;
+      return { ...rest, ...creation, ...companyFieldsOf({ memberId }) };
     }
     case "message.dispatch":
-    case "thread.fork":
     case "thread.merge_back":
     case "delegated_task.request":
-      return { ...command, ...provenance };
+      return { ...command, ...creation };
     default:
       return command;
   }
+}
+
+const memberDenied = (message: string) =>
+  new EnvironmentAuthorizationError({
+    message,
+    requiredScope: AuthOrchestrationOperateScope,
+  });
+
+/**
+ * A company member may change only threads their sessions started; the owner may change any.
+ * Forking is allowed, since the fork is the member's own. This coordinates people on one
+ * machine; it is not a sandbox, because a member's agents and terminals run as the owner.
+ */
+export const assertMemberMayChange = Effect.fn("ThreadManagement.assertMemberMayChange")(function* (
+  getThreadShell: Orchestrator.OrchestratorV2["Service"]["getThreadShell"],
+  memberId: string | undefined,
+  threadIds: ReadonlyArray<ThreadId>,
+) {
+  if (memberId === undefined) return;
+  for (const threadId of threadIds) {
+    const shell = yield* getThreadShell(threadId).pipe(
+      Effect.mapError(() => memberDenied("Could not check who started this thread.")),
+    );
+    if (shell !== null && shell.memberId !== memberId) {
+      return yield* memberDenied(
+        "Only the teammate who started this thread can change it. Fork it to continue on your own.",
+      );
+    }
+  }
+});
+
+/** The existing threads a member's command would change. */
+export function memberCommandThreadIds(command: OrchestrationV2Command): ReadonlyArray<ThreadId> {
+  return command.type === "thread.fork" ? [] : existingThreadIdsForCommand(command);
 }
 
 function existingThreadIdsForCommand(

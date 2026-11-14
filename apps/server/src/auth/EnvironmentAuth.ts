@@ -3,6 +3,9 @@ import {
   AuthAccessWriteScope,
   AuthOrchestrationOperateScope,
   AuthStandardClientScopes,
+  COMPANY_MEMBER_SCOPES,
+  companyMemberIdFromSubject,
+  companyMemberSubject,
   type AuthAccessTokenResult,
   type AuthBrowserSessionResult,
   type AuthClientMetadata,
@@ -45,6 +48,11 @@ import { REUSABLE_DEV_SESSION_EXPIRES_AT, resolveReusableDevAuth } from "./Reusa
 import { verifyRequestDpopProof } from "./dpop.ts";
 import { DESKTOP_RENDERER_ORIGINS } from "../httpCors.ts";
 import * as SqlitePersistence from "../persistence/Sqlite.ts";
+
+const memberIdOfSubject = (subject: string) => {
+  const memberId = companyMemberIdFromSubject(subject);
+  return memberId === null ? {} : { memberId };
+};
 
 const DEFAULT_SESSION_SUBJECT = "cli-issued-session";
 export const INTERNAL_ADMINISTRATIVE_BOOTSTRAP_SUBJECT = "administrative-bootstrap";
@@ -822,6 +830,7 @@ export const make = Effect.gen(function* () {
             ...authScopeResponse(session.scopes),
             sessionMethod: session.method,
             ...(session.expiresAt ? { expiresAt: DateTime.toUtc(session.expiresAt) } : {}),
+            ...memberIdOfSubject(session.subject),
           }) satisfies AuthSessionState,
       ),
       Effect.catchIf(isServerAuthCredentialError, () =>
@@ -1126,8 +1135,11 @@ export const make = Effect.gen(function* () {
 
   const issuePairingCredential: EnvironmentAuth["Service"]["issuePairingCredential"] = (input) =>
     issuePairingCredentialForSubject({
-      scopes: input?.scopes ?? AuthStandardClientScopes,
-      subject: "one-time-token",
+      scopes:
+        input?.scopes ??
+        (input?.memberId === undefined ? AuthStandardClientScopes : COMPANY_MEMBER_SCOPES),
+      subject:
+        input?.memberId === undefined ? "one-time-token" : companyMemberSubject(input.memberId),
       ...(input?.label ? { label: input.label } : {}),
     }).pipe(Effect.withSpan("EnvironmentAuth.issuePairingCredential"));
 
