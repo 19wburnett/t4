@@ -92,6 +92,8 @@ export interface McpClientSession {
 export interface AuthenticatedSession {
   readonly sessionId: AuthSessionId;
   readonly subject: string;
+  /** The name the session was paired with; a teammate's is the name their invite gave them. */
+  readonly clientLabel?: string;
   readonly method: ServerAuthSessionMethod;
   readonly scopes: ReadonlyArray<AuthEnvironmentScope>;
   readonly proofKeyThumbprint?: string;
@@ -738,6 +740,7 @@ export const make = Effect.gen(function* () {
       Effect.map((session) => ({
         sessionId: session.sessionId,
         subject: session.subject,
+        ...(session.client.label ? { clientLabel: session.client.label } : {}),
         method: session.method,
         scopes: session.scopes,
         ...(session.proofKeyThumbprint ? { proofKeyThumbprint: session.proofKeyThumbprint } : {}),
@@ -1284,6 +1287,7 @@ export const make = Effect.gen(function* () {
           return {
             sessionId: session.sessionId,
             subject: session.subject,
+            ...(session.client.label ? { clientLabel: session.client.label } : {}),
             method: session.method,
             scopes: session.scopes,
             ...(session.proofKeyThumbprint

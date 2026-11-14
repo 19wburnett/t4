@@ -435,7 +435,11 @@ it.layer(Layer.provideMerge(layerTools, layerOrchestration))("work a link starts
             createdBy: "user",
             creationSource: "web",
           },
-          { createdBy: "user", creationSource: "web", memberId: "sam" },
+          {
+            createdBy: "user",
+            creationSource: "web",
+            author: { memberId: "sam", name: "Sam" },
+          },
         ),
       );
       const shell = yield* projections.getThreadShell(samsThreadId);

@@ -39,6 +39,11 @@ A member who holds `access:write` is an admin and is not held to its own
 threads. This is coordination, not a sandbox: a member's terminals and agents
 run as this environment's user.
 
+The same handlers stamp a member's messages with `author` and their answers to
+runtime requests with `respondedBy`, naming them by the session's label, which
+the invite set to the teammate's name. The server strips both from client
+commands, so a teammate cannot speak as someone else.
+
 ### Guest links are not sessions
 
 A [guest link](../user/guest-links.md) gives one browser read access to one

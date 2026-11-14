@@ -8,6 +8,7 @@ import {
   RunAttemptId,
   ThreadId,
 } from "@t3tools/contracts";
+import { authoredText } from "./messageAuthor.ts";
 import * as Clock from "effect/Clock";
 import type * as DateTime from "effect/DateTime";
 import * as Context from "effect/Context";
@@ -375,7 +376,7 @@ export const layer: Layer.Layer<
               message: {
                 messageId: message.id,
                 text: projectComposerContextForProvider({
-                  text: message.text,
+                  text: authoredText(message),
                   records: message.context?.records ?? [],
                 }),
                 attachments: message.attachments,

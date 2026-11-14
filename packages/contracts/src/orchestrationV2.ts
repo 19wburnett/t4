@@ -131,6 +131,17 @@ export const companyFieldsOf = (source: { readonly memberId?: string | undefined
   source.memberId === undefined ? {} : { memberId: source.memberId };
 
 /**
+ * The teammate who sent a message or answered a request: their `company/members` id and the
+ * name their invite gave them. Absent means the owner, an agent, or the system. Only the server
+ * sets it, from the sender's session.
+ */
+export const OrchestrationV2MessageAuthor = Schema.Struct({
+  memberId: TrimmedNonEmptyString,
+  name: TrimmedNonEmptyString,
+});
+export type OrchestrationV2MessageAuthor = typeof OrchestrationV2MessageAuthor.Type;
+
+/**
  * Work from a link paired below full access may change only work from the same
  * link. A full-access link's agents already run as this environment's user,
  * so fencing T3's own tools would stop nothing they could not do anyway. An
@@ -1239,6 +1250,8 @@ export const OrchestrationV2RuntimeRequest = Schema.Struct({
   decision: Schema.optional(ProviderApprovalDecision),
   feedback: Schema.optional(Schema.String),
   answers: Schema.optional(ProviderUserInputAnswers),
+  /** The teammate who answered; absent for the owner or an agent. */
+  respondedBy: Schema.optional(OrchestrationV2MessageAuthor),
 });
 export type OrchestrationV2RuntimeRequest = typeof OrchestrationV2RuntimeRequest.Type;
 
@@ -1303,6 +1316,7 @@ export const OrchestrationV2ConversationMessage = Schema.Struct({
   ...OrchestrationV2CreationFields,
   scheduledTaskId: Schema.optional(ScheduledTaskId),
   senderThreadId: Schema.optional(ThreadId),
+  author: Schema.optional(OrchestrationV2MessageAuthor),
   idleCompaction: Schema.optional(OrchestrationV2IdleCompaction),
   /**
    * The message is the script a provider-native workflow run executes, not prose. Clients show
@@ -1611,6 +1625,7 @@ export const OrchestrationV2TurnItem = Schema.Union([
     messageId: MessageId,
     scheduledTaskId: Schema.optional(ScheduledTaskId),
     senderThreadId: Schema.optional(ThreadId),
+    author: Schema.optional(OrchestrationV2MessageAuthor),
     idleCompaction: Schema.optional(OrchestrationV2IdleCompaction),
     workflowScript: OrchestrationV2ConversationMessage.fields.workflowScript,
     inputIntent: OrchestrationV2UserMessageInputIntent,
@@ -2445,6 +2460,7 @@ export const OrchestrationV2TurnItemJson = Schema.Union([
     messageId: MessageId,
     scheduledTaskId: Schema.optional(ScheduledTaskId),
     senderThreadId: Schema.optional(ThreadId),
+    author: Schema.optional(OrchestrationV2MessageAuthor),
     idleCompaction: Schema.optional(OrchestrationV2IdleCompaction),
     workflowScript: OrchestrationV2ConversationMessage.fields.workflowScript,
     inputIntent: OrchestrationV2UserMessageInputIntent,
@@ -3148,6 +3164,8 @@ export const OrchestrationV2Command = Schema.Union([
     ...OrchestrationV2CreationFields,
     scheduledTaskId: Schema.optional(ScheduledTaskId),
     senderThreadId: Schema.optional(ThreadId),
+    /** Only the server sets this, from the sending teammate's session. */
+    author: Schema.optional(OrchestrationV2MessageAuthor),
     idleCompaction: Schema.optional(OrchestrationV2IdleCompaction),
     commandId: CommandId,
     threadId: ThreadId,
@@ -3278,6 +3296,8 @@ export const OrchestrationV2Command = Schema.Union([
     feedback: Schema.optional(Schema.String),
     answers: Schema.optional(ProviderUserInputAnswers),
     attachmentsByQuestionId: Schema.optional(UserInputAttachments),
+    /** Only the server sets this, from the answering teammate's session. */
+    respondedBy: Schema.optional(OrchestrationV2MessageAuthor),
   }),
   Schema.Struct({
     type: Schema.Literal("thread.user-input.dismiss"),
