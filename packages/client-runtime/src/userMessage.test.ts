@@ -7,6 +7,7 @@ import {
   resolveUserMessageFileCards,
   resolveUserMessageGrouping,
   resolveUserMessagePresentation,
+  userMessageSenderLabel,
 } from "./userMessage.ts";
 
 describe("resolveUserMessageGrouping", () => {
@@ -28,6 +29,8 @@ describe("resolveUserMessageGrouping", () => {
       { ...own, createdBy: "agent" as const },
       { ...own, createdBy: "agent" as const, creationSource: "server" as const },
       { ...own, scheduledTaskId: ScheduledTaskId.make("task") },
+      // A teammate's message never groups with someone else's.
+      { ...own, author: { memberId: "sam", name: "Sam" } },
       {
         ...own,
         context: {
@@ -65,6 +68,17 @@ describe("resolveUserMessageGrouping", () => {
       expect(resolveUserMessageGrouping(steer, own, undefined).continuesSteer).toBe(false);
       expect(resolveUserMessageGrouping(own, steer, undefined).continuesSteer).toBe(false);
     }
+  });
+});
+
+describe("userMessageSenderLabel", () => {
+  it("says You for the viewer's own messages and names everyone else", () => {
+    const sam = { memberId: "sam", name: "Sam" };
+    expect(userMessageSenderLabel(undefined, null)).toBe("You");
+    expect(userMessageSenderLabel(sam, null)).toBe("Sam");
+    expect(userMessageSenderLabel(sam, "sam")).toBe("You");
+    expect(userMessageSenderLabel(undefined, "sam")).toBe("Owner");
+    expect(userMessageSenderLabel(sam, "ana")).toBe("Sam");
   });
 });
 

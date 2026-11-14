@@ -1239,6 +1239,11 @@ export const layerWsRpc = (
     Effect.gen(function* () {
       const currentSessionId = currentSession.sessionId;
       const currentMemberId = companyMemberIdFromSubject(currentSession.subject) ?? undefined;
+      // A teammate's messages and answers carry who they are; the owner's carry nothing.
+      const currentAuthor =
+        currentMemberId === undefined
+          ? undefined
+          : { memberId: currentMemberId, name: currentSession.clientLabel ?? currentMemberId };
       const sql = yield* SqlClient.SqlClient;
       const threadManagement = yield* ThreadManagementService.ThreadManagementService;
       // A teammate who can manage access is an admin here and may change anyone's threads.
@@ -1932,7 +1937,7 @@ export const layerWsRpc = (
                           createdBy: "user",
                           creationSource:
                             "creationSource" in command ? command.creationSource : "web",
-                          memberId: currentMemberId,
+                          author: currentAuthor,
                         }),
                       )
                   ).pipe(Effect.provide(intakeContext)),
@@ -2117,6 +2122,7 @@ export const layerWsRpc = (
                             ...(input.initialMessage.context === undefined
                               ? {}
                               : { context: input.initialMessage.context }),
+                            ...(currentAuthor === undefined ? {} : { author: currentAuthor }),
                           },
                         }),
                     createdBy: "user",

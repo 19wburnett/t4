@@ -14,6 +14,7 @@ import {
   CommandId,
   companyFieldsOf,
   EnvironmentAuthorizationError,
+  type OrchestrationV2MessageAuthor,
   isListedThreadLineage,
   MessageId,
   OrchestrationV2StopWorkflowError,
@@ -75,15 +76,16 @@ export type ThreadManagementSendMode = "auto" | "queue" | "steer" | "restart";
 export interface ThreadManagementProvenance {
   readonly createdBy: OrchestrationV2Actor;
   readonly creationSource: OrchestrationV2CreationSource;
-  /** The company member whose session sent the command; absent for the owner. */
-  readonly memberId?: string | undefined;
+  /** The teammate whose session sent the command; absent for the owner. */
+  readonly author?: OrchestrationV2MessageAuthor | undefined;
 }
 
 export function withCreationProvenance(
   command: OrchestrationV2Command,
   provenance: ThreadManagementProvenance,
 ): OrchestrationV2Command {
-  const { memberId, ...creation } = provenance;
+  const { author, ...creation } = provenance;
+  const memberId = author?.memberId;
   switch (command.type) {
     case "thread.create": {
       // Only the server stamps a link's origin or a member, so a client cannot set one.
@@ -99,7 +101,14 @@ export function withCreationProvenance(
       const { memberId: _memberId, ...rest } = command;
       return { ...rest, ...creation, ...companyFieldsOf({ memberId }) };
     }
-    case "message.dispatch":
+    case "message.dispatch": {
+      const { author: _author, ...rest } = command;
+      return { ...rest, ...creation, ...(author === undefined ? {} : { author }) };
+    }
+    case "runtime-request.respond": {
+      const { respondedBy: _respondedBy, ...rest } = command;
+      return author === undefined ? rest : { ...rest, respondedBy: author };
+    }
     case "thread.merge_back":
     case "delegated_task.request":
       return { ...command, ...creation };

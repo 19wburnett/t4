@@ -8,9 +8,14 @@ import {
   type ServerProviderSkill,
   ThreadId,
 } from "@t3tools/contracts";
-import { resolveUserMessagePresentation } from "@t3tools/client-runtime/user-message";
+import { useAtomValue } from "@effect/atom-react";
+import {
+  resolveUserMessagePresentation,
+  userMessageSenderLabel,
+} from "@t3tools/client-runtime/user-message";
 import { Link } from "@tanstack/react-router";
 import { useQuietThreadShell } from "../../state/entities";
+import { environmentSession } from "../../state/session";
 import { useEnvironmentQuery } from "../../state/query";
 import { serverEnvironment } from "../../state/server";
 import { replaceComposerContextReferences } from "@t3tools/shared/composerContextReferences";
@@ -434,6 +439,14 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
     (attachment) => !isImageAttachment(attachment) && !isFileAttachment(attachment),
   );
   const userMessage = resolveUserMessagePresentation(row.message);
+  // In a shared thread, a person's message says who sent it; the viewer's own say "You".
+  const viewerMemberId =
+    useAtomValue(environmentSession.sessionStateValueAtom(ctx.activeThreadEnvironmentId))
+      ?.memberId ?? null;
+  const authorLabel =
+    userMessage.attribution === null
+      ? userMessageSenderLabel(userMessage.author, viewerMemberId)
+      : "You";
   // Messages from other agents fold to one line so the user's own messages stay easy to find.
   const folded = userMessage.attribution === "agent";
   const [expanded, setExpanded] = useState(false);
@@ -824,6 +837,10 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
         <div aria-hidden>
           <GuestMessageName name={userMessage.guestName} />
         </div>
+      ) : authorLabel !== "You" && !row.groupedWithPrevious ? (
+        <p aria-hidden className="me-1 text-2xs text-muted-foreground">
+          {authorLabel}
+        </p>
       ) : null}
       {(row.message.inputIntent === "steer" ||
         row.message.inputIntent === "promoted_queued_to_steer") &&
@@ -833,7 +850,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
       {mediaAboveText ? (
         <div className="flex max-w-[80%] justify-end">
           {/* The heading leads the media so screen readers reach it before the images. */}
-          <MessageAuthorHeading>You</MessageAuthorHeading>
+          <MessageAuthorHeading>{authorLabel}</MessageAuthorHeading>
           {mediaBlock}
         </div>
       ) : null}
@@ -856,7 +873,7 @@ function UserTimelineRow({ row }: { row: Extract<TimelineRow, { kind: "message" 
             {folded
               ? senderLabel
               : userMessage.guestName === undefined
-                ? "You"
+                ? authorLabel
                 : `${userMessage.guestName} (guest)`}
           </MessageAuthorHeading>
         )}

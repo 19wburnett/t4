@@ -4,6 +4,7 @@ import * as TerminalManager from "../terminal/Manager.ts";
 import { resolveProjectSettings } from "@t3tools/shared/projectSettings";
 import {
   companyFieldsOf,
+  type OrchestrationV2MessageAuthor,
   CommandId,
   type ChatAttachment,
   type MessageId,
@@ -74,6 +75,8 @@ export interface ThreadLaunchInitialMessage {
   readonly messageId?: MessageId;
   readonly scheduledTaskId?: ScheduledTaskId;
   readonly senderThreadId?: ThreadId;
+  /** The teammate who sent it; only the server sets it. */
+  readonly author?: OrchestrationV2MessageAuthor;
   readonly text: string;
   readonly attachments: ReadonlyArray<ChatAttachment>;
   readonly context?: import("@t3tools/contracts").OrchestrationMessageContext | undefined;
@@ -970,6 +973,9 @@ const make = Effect.gen(function* () {
               ...(input.initialMessage.senderThreadId === undefined
                 ? {}
                 : { senderThreadId: input.initialMessage.senderThreadId }),
+              ...(input.initialMessage.author === undefined
+                ? {}
+                : { author: input.initialMessage.author }),
               attachments: input.initialMessage.attachments,
               ...(input.initialMessage.context ? { context: input.initialMessage.context } : {}),
               ...(input.generateTitle === true ? { titleSeed: input.title } : {}),

@@ -16,6 +16,7 @@ import {
   ProjectId,
   ProviderInstanceId,
   RunId,
+  RuntimeRequestId,
   ThreadId,
 } from "@t3tools/contracts";
 import * as Deferred from "effect/Deferred";
@@ -82,10 +83,11 @@ it("stamps authoritative provenance on commands that create threads or messages"
   expect(stamped).not.toHaveProperty("delegatedFrom");
   expect(stamped).not.toHaveProperty("memberId");
 
+  const sam = { memberId: "sam", name: "Sam" };
   const byMember = ThreadManagementService.withCreationProvenance(command, {
     createdBy: "user",
     creationSource: "web",
-    memberId: "sam",
+    author: sam,
   });
   expect(byMember).toMatchObject({ memberId: "sam", bot: "marketer" });
   const fork = ThreadManagementService.withCreationProvenance(
@@ -99,9 +101,58 @@ it("stamps authoritative provenance on commands that create threads or messages"
       sourcePoint: { type: "latest_stable" },
       memberId: "forged-member",
     },
-    { createdBy: "user", creationSource: "web", memberId: "sam" },
+    { createdBy: "user", creationSource: "web", author: sam },
   );
   expect(fork).toMatchObject({ memberId: "sam" });
+
+  // A message and an answer say which teammate sent them; a client cannot claim to be one.
+  const forged = { memberId: "alex", name: "Alex" };
+  const message: OrchestrationV2Command = {
+    type: "message.dispatch",
+    createdBy: "user",
+    creationSource: "web",
+    commandId: CommandId.make("command:thread-management:message"),
+    threadId: ThreadId.make("thread:thread-management:create"),
+    messageId: MessageId.make("message:thread-management"),
+    text: "Hello",
+    attachments: [],
+    dispatchMode: { type: "start_immediately" },
+    author: forged,
+  };
+  expect(
+    ThreadManagementService.withCreationProvenance(message, {
+      createdBy: "user",
+      creationSource: "web",
+      author: sam,
+    }),
+  ).toMatchObject({ author: sam });
+  expect(
+    ThreadManagementService.withCreationProvenance(message, {
+      createdBy: "user",
+      creationSource: "web",
+    }),
+  ).not.toHaveProperty("author");
+  const answer: OrchestrationV2Command = {
+    type: "runtime-request.respond",
+    commandId: CommandId.make("command:thread-management:answer"),
+    threadId: ThreadId.make("thread:thread-management:create"),
+    requestId: RuntimeRequestId.make("request:thread-management"),
+    decision: "accept",
+    respondedBy: forged,
+  };
+  expect(
+    ThreadManagementService.withCreationProvenance(answer, {
+      createdBy: "user",
+      creationSource: "web",
+      author: sam,
+    }),
+  ).toMatchObject({ respondedBy: sam });
+  expect(
+    ThreadManagementService.withCreationProvenance(answer, {
+      createdBy: "user",
+      creationSource: "web",
+    }),
+  ).not.toHaveProperty("respondedBy");
 });
 
 it.effect("lets a member change only the threads they started, and fork any", () =>

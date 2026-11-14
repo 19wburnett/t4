@@ -80,6 +80,10 @@ them. An **Admin** can also invite and remove people and change anyone's
 thread. Neither can change providers, settings, or the server itself. Both run
 agents and terminals as this machine's user, so invite people you trust with it.
 
+Every message a teammate sends shows their name in the thread, and your own
+say **You**. The agent reads a teammate's message as "Message from teammate
+Sam", so it knows whose request it is working on.
+
 **New invite link** makes another link when one expires or was used up.
 **Remove from company** signs them out of every company machine you can manage
 from this browser, cancels unused links,

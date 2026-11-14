@@ -6,6 +6,7 @@ import {
   type OrchestrationV2Actor,
   type OrchestrationV2CreationSource,
   type OrchestrationV2IdleCompaction,
+  type OrchestrationV2MessageAuthor,
   type OrchestrationV2UserMessageInputIntent,
   ScheduledTaskId,
 } from "@t3tools/contracts";
@@ -66,12 +67,15 @@ export function resolveUserMessagePresentation(message: {
   readonly creationSource?: OrchestrationV2CreationSource;
   readonly scheduledTaskId?: ScheduledTaskId | undefined;
   readonly context?: { readonly guest?: GuestMessageAttribution | undefined } | undefined;
+  readonly author?: OrchestrationV2MessageAuthor | undefined;
 }): {
   readonly text: string;
   readonly attribution: "automation" | "agent" | "t3code" | "guest" | null;
   readonly scheduledTaskId: ScheduledTaskId | undefined;
   /** Set when `attribution` is "guest". */
   readonly guestName?: string;
+  /** The teammate who sent it; absent for the owner. */
+  readonly author?: OrchestrationV2MessageAuthor;
 } {
   if (message.role !== "user") {
     return { text: message.text, attribution: null, scheduledTaskId: undefined };
@@ -114,7 +118,20 @@ export function resolveUserMessagePresentation(message: {
           ? "t3code"
           : "agent",
     scheduledTaskId: undefined,
+    ...(message.author === undefined ? {} : { author: message.author }),
   };
+}
+
+/**
+ * Who a person's message is from, as the viewer sees it: their own say "You", a teammate's give
+ * their name, and the owner's say "Owner" to a teammate.
+ */
+export function userMessageSenderLabel(
+  author: OrchestrationV2MessageAuthor | undefined,
+  viewerMemberId: string | null,
+): string {
+  if (author === undefined) return viewerMemberId === null ? "You" : "Owner";
+  return author.memberId === viewerMemberId ? "You" : author.name;
 }
 
 type GroupableUserMessage = Parameters<typeof resolveUserMessagePresentation>[0] & {
@@ -130,10 +147,16 @@ export function resolveUserMessageGrouping(
     value?.role === "user" && resolveUserMessagePresentation(value).attribution === null;
   const isSteer = (value: GroupableUserMessage | undefined) =>
     value?.inputIntent === "steer" || value?.inputIntent === "promoted_queued_to_steer";
-  const groupedWithPrevious = isOwnMessage(message) && isOwnMessage(previous);
+  // Messages group only when the same person sent them.
+  const sameSender = (
+    left: GroupableUserMessage | undefined,
+    right: GroupableUserMessage | undefined,
+  ) => (left?.author?.memberId ?? null) === (right?.author?.memberId ?? null);
+  const groupedWithPrevious =
+    isOwnMessage(message) && isOwnMessage(previous) && sameSender(message, previous);
   return {
     groupedWithPrevious,
-    groupedWithNext: isOwnMessage(message) && isOwnMessage(next),
+    groupedWithNext: isOwnMessage(message) && isOwnMessage(next) && sameSender(message, next),
     continuesSteer: groupedWithPrevious && isSteer(message) && isSteer(previous),
   };
 }
