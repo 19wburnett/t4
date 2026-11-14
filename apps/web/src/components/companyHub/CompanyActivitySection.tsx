@@ -24,6 +24,7 @@ import {
   threadActivity,
   threadStarterName,
 } from "./companyPeople.logic";
+import { machineOwners } from "./companyMachines.logic";
 import { employeeFromRecord, TEAM_COLLECTION } from "./companyTeam.logic";
 import { useCompanyMachines, useCompanyRecords } from "./useCompanyRecords";
 
@@ -51,6 +52,7 @@ export function CompanyActivitySection(props: {
   const members = memberRecords.map(memberFromRecord);
   const employees = employeeRecords.map(employeeFromRecord);
   const machines = useCompanyMachines(props.environmentId, props.projectId);
+  const credit = { members, machineOwners: machineOwners(machines) };
   const machineNames = new Map<string, string>(
     machines.map((machine) => [machine.environmentId, machine.name]),
   );
@@ -111,7 +113,7 @@ export function CompanyActivitySection(props: {
       </div>
       {view === "everyone" ? (
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {everyoneSummaries({ threads: shells, members, employees }).map((summary) => (
+          {everyoneSummaries({ threads: shells, credit, employees }).map((summary) => (
             <ActorCard key={summary.key} summary={summary} onOpen={openActor} />
           ))}
         </div>
@@ -128,7 +130,7 @@ export function CompanyActivitySection(props: {
           />
           <ThreadList
             machine={machineOf}
-            threads={personThreads(shells, personKey === OWNER_KEY ? null : personKey, members)}
+            threads={personThreads(shells, personKey === OWNER_KEY ? null : personKey, credit)}
             empty="Nothing started yet."
           />
         </>
@@ -149,7 +151,7 @@ export function CompanyActivitySection(props: {
             <ThreadList
               machine={machineOf}
               threads={employeeThreads(shells, selectedEmployee.recordId)}
-              starter={(thread) => threadStarterName(thread, members, OWNER_LABEL)}
+              starter={(thread) => threadStarterName(thread, credit, OWNER_LABEL)}
               empty={`Nobody has asked ${selectedEmployee.name} for work yet.`}
             />
           </>
@@ -170,7 +172,7 @@ export function CompanyActivitySection(props: {
           <ThreadList
             machine={machineOf}
             threads={projectThreads(shells, projectKey)}
-            starter={(thread) => threadStarterName(thread, members, OWNER_LABEL)}
+            starter={(thread) => threadStarterName(thread, credit, OWNER_LABEL)}
             empty="No work in this project yet."
           />
         </>

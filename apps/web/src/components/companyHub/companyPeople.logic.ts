@@ -94,7 +94,24 @@ function activityThreads(
     .toSorted((left, right) => right.updatedAt.localeCompare(left.updatedAt));
 }
 
-const threadMemberId = (thread: EnvironmentThreadShell) => thread.source.memberId ?? null;
+/** What decides who a thread is for: the roster, and whose own machine each machine is. */
+export interface Credit {
+  readonly members: ReadonlyArray<Member>;
+  /** Environment id to the teammate whose own machine it is. */
+  readonly machineOwners: ReadonlyMap<string, string>;
+}
+
+/**
+ * The teammate a thread is for: whoever's session started it, else whose own machine it is on.
+ * `null` is the owner, including a starter no longer on the roster. The server's
+ * `t3_team_activity` credits threads the same way.
+ */
+function starterOf(thread: EnvironmentThreadShell, credit: Credit): string | null {
+  const starter = thread.source.memberId ?? credit.machineOwners.get(thread.environmentId) ?? null;
+  return starter !== null && credit.members.some((member) => member.recordId === starter)
+    ? starter
+    : null;
+}
 
 const threadEmployeeId = (thread: EnvironmentThreadShell) => thread.source.employeeId ?? null;
 
@@ -119,17 +136,13 @@ const summarize = (
   latest: threads[0] ?? null,
 });
 
-/** `null` is the owner: threads no listed teammate started. */
+/** `null` is the owner. */
 export function personThreads(
   threads: ReadonlyArray<EnvironmentThreadShell>,
   memberId: string | null,
-  members: ReadonlyArray<Member>,
+  credit: Credit,
 ): ReadonlyArray<EnvironmentThreadShell> {
-  const known = new Set<string>(members.map((member) => member.recordId));
-  return activityThreads(threads).filter((thread) => {
-    const starter = threadMemberId(thread);
-    return memberId === null ? starter === null || !known.has(starter) : starter === memberId;
-  });
+  return activityThreads(threads).filter((thread) => starterOf(thread, credit) === memberId);
 }
 
 export function employeeThreads(
@@ -155,23 +168,27 @@ export function projectThreads(
  */
 export function everyoneSummaries(input: {
   readonly threads: ReadonlyArray<EnvironmentThreadShell>;
-  readonly members: ReadonlyArray<Member>;
+  readonly credit: Credit;
   readonly employees: ReadonlyArray<Employee>;
 }): ReadonlyArray<ActorSummary> {
+  // Filter and sort once; every card then picks its threads from the same list.
+  const live = activityThreads(input.threads);
+  const startedBy = (memberId: string | null) =>
+    live.filter((thread) => starterOf(thread, input.credit) === memberId);
   return [
-    summarize("owner", { kind: "owner" }, personThreads(input.threads, null, input.members)),
-    ...input.members.map((member) =>
+    summarize("owner", { kind: "owner" }, startedBy(null)),
+    ...input.credit.members.map((member) =>
       summarize(
         `member:${member.recordId}`,
         { kind: "member", member },
-        personThreads(input.threads, member.recordId, input.members),
+        startedBy(member.recordId),
       ),
     ),
     ...input.employees.map((employee) =>
       summarize(
         `employee:${employee.recordId}`,
         { kind: "employee", employee },
-        employeeThreads(input.threads, employee.recordId),
+        live.filter((thread) => threadEmployeeId(thread) === employee.recordId),
       ),
     ),
   ];
@@ -180,9 +197,9 @@ export function everyoneSummaries(input: {
 /** Who started a thread, for lists that mix people. */
 export function threadStarterName(
   thread: EnvironmentThreadShell,
-  members: ReadonlyArray<Member>,
+  credit: Credit,
   ownerLabel: string,
 ): string {
-  const memberId = threadMemberId(thread);
-  return members.find((member) => member.recordId === memberId)?.name ?? ownerLabel;
+  const memberId = starterOf(thread, credit);
+  return credit.members.find((member) => member.recordId === memberId)?.name ?? ownerLabel;
 }
