@@ -5,6 +5,7 @@ import {
   CompanyBrainRecord,
   CompanyBrainRecordId,
   CompanyBrainRecordSummary,
+  OrchestratorMcpDelegateTaskResult,
   OrchestratorMcpFailure,
   ProjectId,
   TrimmedNonEmptyString,
@@ -16,6 +17,7 @@ import * as CompanyBrain from "../../../companyBrain/CompanyBrain.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as ProviderInstanceRegistry from "../../../provider/ProviderInstanceRegistry.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import * as OrchestratorMcpService from "../../OrchestratorMcpService.ts";
 
 const shared = {
   failure: OrchestratorMcpFailure,
@@ -75,4 +77,23 @@ const CompanyBrainSaveTool = Tool.make("t3_brain_save", {
   }),
 }).annotate(Tool.Destructive, false);
 
-export const CompanyBrainToolkit = Toolkit.make(CompanyBrainFindTool, CompanyBrainSaveTool);
+const BotMessageTool = Tool.make("t3_bot_message", {
+  failure: OrchestratorMcpFailure,
+  failureMode: "return",
+  dependencies: [...shared.dependencies, OrchestratorMcpService.OrchestratorMcpService],
+  description:
+    'Message a teammate: another AI employee in company/agents/. They work on it in their own thread with their instructions, and their answer wakes this thread, so end your turn after sending. Find teammates with t3_brain_find, collection "agents". To follow up in their thread, use t3_thread_send with the returned childThreadId.',
+  parameters: Schema.Struct({
+    bot: CompanyBrainRecordId.annotate({ description: "The teammate's record id in agents." }),
+    message: TrimmedNonEmptyString.check(Schema.isMaxLength(60_000)),
+  }),
+  success: OrchestratorMcpDelegateTaskResult,
+})
+  .annotate(Tool.Destructive, true)
+  .annotate(Tool.OpenWorld, true);
+
+export const CompanyBrainToolkit = Toolkit.make(
+  CompanyBrainFindTool,
+  CompanyBrainSaveTool,
+  BotMessageTool,
+);

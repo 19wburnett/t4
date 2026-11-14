@@ -1,6 +1,7 @@
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
+  CompanyBrainRecordId,
   MessageId,
   EventId,
   NodeId,
@@ -991,6 +992,68 @@ it.effect("keeps delegated child pull-request links independent of the parent", 
     const parentAfterChildLink = yield* projections.getThreadProjection(parentThreadId);
     assert.deepEqual(parentAfterChildLink.thread.linkedPullRequest, parentPullRequest);
     assert.deepEqual(parentAfterChildLink.thread.pullRequests, parent.thread.pullRequests);
+  }).pipe(Effect.provide(layerTest)),
+);
+
+it.effect("only a delegated task sent to a bot works as that bot", () =>
+  Effect.gen(function* () {
+    const orchestrator = yield* Orchestrator.OrchestratorV2;
+    const projections = yield* ProjectionStore.ProjectionStoreV2;
+    const parentThreadId = ThreadId.make("thread:bot-parent");
+    const sdr = CompanyBrainRecordId.make("SDR");
+    const designer = CompanyBrainRecordId.make("Designer");
+    yield* orchestrator.dispatch({
+      type: "thread.create",
+      commandId: CommandId.make("create-bot-parent"),
+      threadId: parentThreadId,
+      projectId: ProjectId.make("project:bots"),
+      title: "SDR thread",
+      modelSelection,
+      runtimeMode: "full-access",
+      interactionMode: "default",
+      branch: null,
+      worktreePath: null,
+      bot: sdr,
+      createdBy: "user",
+      creationSource: "web",
+    });
+    assert.equal((yield* projections.getThreadShell(parentThreadId))?.bot, sdr);
+    yield* orchestrator.dispatch({
+      type: "message.dispatch",
+      commandId: CommandId.make("start-bot-parent"),
+      threadId: parentThreadId,
+      messageId: MessageId.make("message:bot-parent"),
+      text: "Get a one-pager made",
+      attachments: [],
+      dispatchMode: { type: "start_immediately" },
+      createdBy: "user",
+      creationSource: "web",
+    });
+    const parentRun = (yield* projections.getThreadProjection(parentThreadId)).runs[0]!;
+    const delegate = (task: string, bot?: CompanyBrainRecordId) =>
+      orchestrator.dispatch({
+        type: "delegated_task.request",
+        commandId: CommandId.make(`delegate:${task}`),
+        parentThreadId,
+        parentRunId: parentRun.id,
+        parentNodeId: parentRun.rootNodeId!,
+        task,
+        modelSelection,
+        runtimeMode: "full-access",
+        interactionMode: "default",
+        ...(bot === undefined ? {} : { bot }),
+        createdBy: "agent",
+        creationSource: "mcp",
+      });
+    yield* delegate("Make the one-pager", designer);
+    yield* delegate("Check the numbers");
+    const { subagents } = yield* projections.getThreadProjection(parentThreadId);
+    const botOf = (task: string) =>
+      projections
+        .getThreadShell(subagents.find((entry) => entry.prompt === task)!.childThreadId!)
+        .pipe(Effect.map((shell) => shell?.bot));
+    assert.equal(yield* botOf("Make the one-pager"), designer);
+    assert.isUndefined(yield* botOf("Check the numbers"));
   }).pipe(Effect.provide(layerTest)),
 );
 

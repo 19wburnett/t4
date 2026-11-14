@@ -8,9 +8,7 @@ import { describe, expect, it } from "vite-plus/test";
 
 import { BRIDGE_AGENTS } from "./companyHub.logic";
 import {
-  buildEmployeePrompt,
   EMPLOYEE_TEMPLATES,
-  type Employee,
   employeeBody,
   employeeFields,
   employeeFromRecord,
@@ -47,41 +45,6 @@ describe("employeeTargetOf", () => {
     expect(employeeTargetOf("grok")).toEqual({ kind: "bridge", agent: BRIDGE_AGENTS[1] });
     expect(employeeTargetOf("claude")).toEqual({ kind: "coding", provider: "claude" });
     expect(employeeTargetOf("codex")).toEqual({ kind: "coding", provider: "codex" });
-  });
-});
-
-describe("buildEmployeePrompt", () => {
-  const employee: Employee = {
-    recordId: CompanyBrainRecordId.make("sam"),
-    name: "Sam",
-    role: "SDR",
-    provider: "muse",
-    providerLabel: "Muse",
-  };
-
-  it("leads with the role, then the instructions, the work, and where to look", () => {
-    const prompt = buildEmployeePrompt(
-      employee,
-      "# Instructions\n\nFind good leads.",
-      "  Draft a sequence.  ",
-    );
-    expect(prompt).toBe(
-      [
-        "You are Sam, our SDR.",
-        "# Instructions\n\nFind good leads.",
-        "Draft a sequence.",
-        "Read company/BRAIN.md and the records in company/ before you start, and save what you learn with t3_brain_save. Ask me before sending or publishing anything.",
-      ].join("\n\n"),
-    );
-  });
-
-  it("skips the name when the employee is still named after the role", () => {
-    expect(buildEmployeePrompt({ ...employee, name: "SDR" }, "", "")).toBe(
-      [
-        "You are our SDR.",
-        "Read company/BRAIN.md and the records in company/ before you start, and save what you learn with t3_brain_save. Ask me before sending or publishing anything.",
-      ].join("\n\n"),
-    );
   });
 });
 

@@ -6,6 +6,7 @@ import {
 import * as Effect from "effect/Effect";
 
 import * as CompanyBrain from "../../../companyBrain/CompanyBrain.ts";
+import * as CompanyTeam from "../../../companyBrain/CompanyTeam.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { callerLabel, companyProject } from "../companyChannels/handlers.ts";
 import { CompanyBrainToolkit } from "./tools.ts";
@@ -77,4 +78,5 @@ export const layer = McpToolAccess.toLayer(CompanyBrainToolkit, {
       };
     }).pipe(Effect.catchTags({ CompanyBrainError: (error) => Effect.fail(failure(error)) })),
   ),
+  t3_bot_message: McpToolAccess.actsAsCaller(CompanyTeam.messageBot),
 });

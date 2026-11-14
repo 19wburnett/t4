@@ -3,6 +3,10 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./companyTeam": {
+      "types": "./src/companyTeam.ts",
+      "import": "./src/companyTeam.ts"
+    },
     "./changedFileKind": {
       "types": "./src/changedFileKind.ts",
       "import": "./src/changedFileKind.ts"

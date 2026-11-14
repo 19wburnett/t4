@@ -145,6 +145,7 @@ function omitIdleSubagentShellsWith(
   return threads.filter(
     (thread) =>
       thread.lineage.relationshipToParent !== "subagent" ||
+      thread.bot !== undefined ||
       isLiveSubagentShell(thread) ||
       facts.subagentParentIds.has(thread.id),
   );
@@ -261,7 +262,10 @@ function shellSubscriberThreadIds(
   const subagents = index.filter(
     (entry) =>
       entry.lineage.relationshipToParent === "subagent" &&
-      (!options.omitIdleSubagents || entry.mayBeLive || facts.subagentParentIds.has(entry.id)),
+      (!options.omitIdleSubagents ||
+        entry.mayBeLive ||
+        entry.bot !== undefined ||
+        facts.subagentParentIds.has(entry.id)),
   );
   const ancestorIds = hiddenChildAncestorIds([
     ...subagents,
