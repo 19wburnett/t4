@@ -31,6 +31,14 @@ sent to a remote environment. Firefox profiles protected by a primary password c
 Imported passwords are stored in the server's secrets directory, readable only by the account that
 runs T3 Code. Importing the same profile again replaces its earlier logins.
 
+**CSV file.** Works in the web and desktop apps, for any environment, and covers Safari, Chrome
+on Windows, and Firefox profiles with a primary password. Export your passwords as CSV from the
+browser or password manager (Chrome: **Password Manager → Settings → Export passwords**; Safari:
+**File → Export → Passwords**; Firefox: **Passwords → ⋯ → Export passwords**), then choose
+**Import CSV**. The file is sent to the selected environment and stored like other imported
+passwords. Importing a file with the same name again replaces its earlier logins. The exported file
+holds every password in plain text, so delete it once the import finishes.
+
 **1Password.** Install the 1Password CLI (`op`) on the machine running the server and sign in with
 `op signin`, then choose **Sync from 1Password**.
 
