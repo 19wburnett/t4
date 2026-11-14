@@ -9,6 +9,7 @@ import {
   type ThreadId,
 } from "@t3tools/contracts";
 import * as DateTime from "effect/DateTime";
+import * as Duration from "effect/Duration";
 import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 
@@ -41,6 +42,7 @@ const matches = (record: CompanyBrainRecordSummary, query: string) => {
 
 const EVERYONE_THREADS = 3;
 const MACHINE_THREADS = 50;
+const REMOTE_TIMEOUT = Duration.seconds(5);
 const ACTIVE_STATUSES = new Set(["preparing", "queued", "starting", "running", "waiting"]);
 
 export interface Roster {
@@ -250,23 +252,29 @@ export const layer = McpToolAccess.toLayer(CompanyBrainToolkit, {
       const { projectId } = yield* companyProject(input.projectId);
       const roster = yield* rosterOf(projectId, here);
       const forwarding = yield* Effect.serviceOption(PeerForwarding.PeerForwarding);
-      const unreachable: Array<string> = [];
+      // Machines are read at once, each with a deadline, so one offline machine costs seconds.
+      const remotes = yield* Effect.forEach(
+        roster.machines,
+        (machine) =>
+          (Option.isNone(forwarding)
+            ? Effect.succeedNone
+            : forwarding.value
+                .call(scope, TeamActivityTool, machine.environmentId, {
+                  environmentId: machine.environmentId,
+                  view: "machine",
+                  limit: MACHINE_THREADS,
+                })
+                .pipe(Effect.timeout(REMOTE_TIMEOUT), Effect.option)
+          ).pipe(Effect.map((result) => ({ machine, result }))),
+        { concurrency: "unbounded" },
+      );
+      const unreachable = remotes.flatMap(({ machine, result }) =>
+        Option.isNone(result) ? [machine.name] : [],
+      );
       const rows: Array<ActivityRow> = [...(yield* localRows(here))];
-      for (const machine of roster.machines) {
-        const remote = Option.isNone(forwarding)
-          ? Option.none()
-          : yield* forwarding.value
-              .call(scope, TeamActivityTool, machine.environmentId, {
-                environmentId: machine.environmentId,
-                view: "machine",
-                limit: MACHINE_THREADS,
-              })
-              .pipe(Effect.option);
-        if (Option.isNone(remote)) {
-          unreachable.push(machine.name);
-          continue;
-        }
-        for (const group of remote.value.groups) {
+      for (const { machine, result } of remotes) {
+        if (Option.isNone(result)) continue;
+        for (const group of result.value.groups) {
           for (const thread of group.threads) {
             rows.push({ ...thread, environmentId: machine.environmentId });
           }

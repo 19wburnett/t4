@@ -64,13 +64,15 @@ their browser in to this machine as them, so their threads show who started
 them. Their browser has to reach this machine, for example over Tailscale.
 
 A **Member** can see everyone's work and change only the threads they start;
-they can fork anyone's thread to continue it as their own. An **Admin** can also
-invite people and change anyone's thread. Neither can change providers,
-settings, or who has access. Both run agents and terminals as this machine's
-user, so invite people you trust with it.
+they can fork anyone's thread to continue it as their own. Routines and agent
+session imports run as the machine's owner, so only the owner and admins manage
+them. An **Admin** can also invite and remove people and change anyone's
+thread. Neither can change providers, settings, or the server itself. Both run
+agents and terminals as this machine's user, so invite people you trust with it.
 
 **New invite link** makes another link when one expires or was used up.
-**Remove from company** signs them out of this machine, cancels unused links,
+**Remove from company** signs them out of every company machine you can manage
+from this browser, cancels unused links,
 and deletes their record. Their threads stay.
 
 ## Machines

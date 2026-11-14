@@ -1,6 +1,7 @@
 import { companyMemberIdFromSubject } from "@t3tools/contracts";
 import type {
   AuthAccessSnapshot,
+  AuthAccessStreamEvent,
   CompanyBrainFields,
   CompanyBrainRecordId,
   CompanyBrainRecordSummary,
@@ -88,4 +89,44 @@ export function machineMemberAccess(snapshot: AuthAccessSnapshot) {
     else if (access.get(memberId) !== "online") access.set(memberId, "signed-in");
   }
   return access;
+}
+
+/**
+ * What removing a teammate must revoke on each company machine, and the machines where their
+ * access could not be read (not connected here, or not an admin there).
+ */
+export function removalPlan(input: {
+  readonly memberId: string;
+  readonly machines: ReadonlyArray<CompanyMachine>;
+  readonly snapshots: ReadonlyArray<AuthAccessSnapshot | null>;
+}) {
+  const subject = `member:${input.memberId}`;
+  const revoke: Array<{
+    readonly environmentId: EnvironmentId;
+    readonly sessionIds: ReadonlyArray<AuthAccessSnapshot["clientSessions"][number]["sessionId"]>;
+    readonly pairingLinkIds: ReadonlyArray<string>;
+  }> = [];
+  const unchecked: Array<string> = [];
+  input.machines.forEach((machine, index) => {
+    const snapshot = input.snapshots[index] ?? null;
+    if (snapshot === null) {
+      unchecked.push(machine.name);
+      return;
+    }
+    const sessionIds = snapshot.clientSessions
+      .filter((session) => session.subject === subject)
+      .map((session) => session.sessionId);
+    const pairingLinkIds = snapshot.pairingLinks
+      .filter((link) => link.subject === subject)
+      .map((link) => link.id);
+    if (sessionIds.length > 0 || pairingLinkIds.length > 0) {
+      revoke.push({ environmentId: machine.environmentId, sessionIds, pairingLinkIds });
+    }
+  });
+  return { revoke, unchecked };
+}
+
+/** A machine's access list, from its live access feed, once it has loaded. */
+export function accessSnapshotOf(event: AuthAccessStreamEvent | null): AuthAccessSnapshot | null {
+  return event?.type === "snapshot" ? event.payload : null;
 }

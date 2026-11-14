@@ -9,7 +9,12 @@ import {
 import * as DateTime from "effect/DateTime";
 import { describe, expect, it } from "vite-plus/test";
 
-import { companyMachines, machineFields, machineMemberAccess } from "./companyMachines.logic";
+import {
+  companyMachines,
+  machineFields,
+  machineMemberAccess,
+  removalPlan,
+} from "./companyMachines.logic";
 
 const home = EnvironmentId.make("environment-home");
 const box = EnvironmentId.make("environment-box");
@@ -76,6 +81,29 @@ describe("machineMemberAccess", () => {
       sam: "online",
       ana: "invited",
       lee: "signed-in",
+    });
+
+    // Removing Sam revokes everywhere it can read, and names the machines it could not.
+    const machines = companyMachines({
+      home: { environmentId: home, name: "Laptop" },
+      records: [record("Box", box), record("Away", "environment-away")],
+    });
+    expect(
+      removalPlan({ memberId: "sam", machines, snapshots: [snapshot, null, snapshot] }),
+    ).toEqual({
+      revoke: [
+        {
+          environmentId: home,
+          sessionIds: ["sam-phone", "sam-laptop"],
+          pairingLinkIds: ["link-sam"],
+        },
+        {
+          environmentId: "environment-away",
+          sessionIds: ["sam-phone", "sam-laptop"],
+          pairingLinkIds: ["link-sam"],
+        },
+      ],
+      unchecked: ["Box"],
     });
   });
 });

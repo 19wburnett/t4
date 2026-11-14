@@ -262,9 +262,12 @@ function MachineAccess(props: {
   const holders = machineMemberAccess(snapshot);
   const withAccess = props.members.filter((member) => holders.has(member.recordId));
   const without = props.members.filter((member) => !holders.has(member.recordId));
+  // Removed from the company but still holding access here, so it can still be taken away.
+  const known = new Set<string>(props.members.map((member) => member.recordId));
+  const former = [...holders.keys()].filter((memberId) => !known.has(memberId));
 
-  const removeAccess = async (member: Member) => {
-    const held = memberAccess(snapshot, member.recordId);
+  const removeAccess = async (memberId: string) => {
+    const held = memberAccess(snapshot, memberId);
     const revoked = await revoke({
       environmentId: props.environmentId,
       input: {
@@ -295,7 +298,12 @@ function MachineAccess(props: {
               })
               .join(", ")}
       </span>
-      {props.members.length > 0 ? (
+      {former.length > 0 ? (
+        <span className="text-xs text-destructive">
+          Former teammates still have access: {former.join(", ")}
+        </span>
+      ) : null}
+      {props.members.length > 0 || former.length > 0 ? (
         <Menu>
           <MenuTrigger render={<Button size="xs" variant="outline" className="mt-1 self-start" />}>
             Manage access
@@ -311,9 +319,18 @@ function MachineAccess(props: {
               <MenuItem
                 key={member.recordId}
                 variant="destructive"
-                onClick={() => void removeAccess(member)}
+                onClick={() => void removeAccess(member.recordId)}
               >
                 Take away {member.name}'s access
+              </MenuItem>
+            ))}
+            {former.map((memberId) => (
+              <MenuItem
+                key={memberId}
+                variant="destructive"
+                onClick={() => void removeAccess(memberId)}
+              >
+                Take away {memberId}'s access
               </MenuItem>
             ))}
           </MenuPopup>

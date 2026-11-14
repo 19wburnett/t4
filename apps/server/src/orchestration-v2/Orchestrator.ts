@@ -440,7 +440,6 @@ export class OrchestratorV2 extends Context.Service<OrchestratorV2, Orchestrator
   "t3/orchestration-v2/Orchestrator/OrchestratorV2",
 ) {}
 
-/** Run ordinals can skip values: a queued run moves past newer runs when it starts. */
 /** A fork belongs to whoever forked it and keeps the source's AI employee. */
 function forkCompanyFields(
   target: OrchestrationV2AppThread,
@@ -451,6 +450,7 @@ function forkCompanyFields(
   return { ...rest, ...companyFieldsOf({ memberId, employeeId: source.employeeId }) };
 }
 
+/** Run ordinals can skip values: a queued run moves past newer runs when it starts. */
 function nextRunOrdinal(projection: Pick<OrchestrationV2ThreadProjection, "runs">): number {
   return projection.runs.reduce((max, run) => Math.max(max, run.ordinal), 0) + 1;
 }

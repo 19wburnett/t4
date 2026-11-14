@@ -171,20 +171,24 @@ export function everyoneSummaries(input: {
   readonly credit: Credit;
   readonly employees: ReadonlyArray<Employee>;
 }): ReadonlyArray<ActorSummary> {
+  // Filter and sort once; every card then picks its threads from the same list.
+  const live = activityThreads(input.threads);
+  const startedBy = (memberId: string | null) =>
+    live.filter((thread) => starterOf(thread, input.credit) === memberId);
   return [
-    summarize("owner", { kind: "owner" }, personThreads(input.threads, null, input.credit)),
+    summarize("owner", { kind: "owner" }, startedBy(null)),
     ...input.credit.members.map((member) =>
       summarize(
         `member:${member.recordId}`,
         { kind: "member", member },
-        personThreads(input.threads, member.recordId, input.credit),
+        startedBy(member.recordId),
       ),
     ),
     ...input.employees.map((employee) =>
       summarize(
         `employee:${employee.recordId}`,
         { kind: "employee", employee },
-        employeeThreads(input.threads, employee.recordId),
+        live.filter((thread) => threadEmployeeId(thread) === employee.recordId),
       ),
     ),
   ];
