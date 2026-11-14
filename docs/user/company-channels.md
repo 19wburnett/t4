@@ -1,7 +1,11 @@
 # Company channels
 
-A company can connect email accounts and X, LinkedIn, and Threads accounts in
-its Company hub. Agents read the inbox and write drafts; only you send them.
+Everything for a company lives in **Settings → Company**: starting work, its
+agents, inbox and outbox, its brain and records, and the email and social
+accounts it uses. Open it with **Company** at the bottom of the sidebar, which
+reopens the company you last worked in, or pick another company at the top of
+the page. A company can connect email accounts and X, LinkedIn, and Threads
+accounts there. Agents read the inbox and write drafts; only you send them.
 Credentials stay on the environment that runs the company and are never shown
 again after you save them. Saving an account signs in with it first, so a
 mistyped password or token is caught right away.
@@ -9,12 +13,57 @@ mistyped password or token is caught right away.
 ## Bring an existing company brain
 
 Every agent reads `company/BRAIN.md` and `company/CHANNELS.md` before it works.
-If your company already keeps this somewhere else, paste a website, a GitHub
-repo (`owner/repo` works), or a Supabase project URL into **Already have a
-company brain?** in the Company hub. This opens a Claude thread with the import
-prompt ready to review. Claude reads the source, fills in `company/`, and records
-where the brain came from so it can be refreshed later. Private repos need `gh`
-signed in, and Supabase needs the Supabase MCP server or CLI on that machine.
+If your company already keeps this somewhere else, paste it into **Already have
+a company brain?** in Settings → Company. A GitHub repo (`owner/repo` works)
+becomes `company/` itself and stays in sync, as described below. A website or a
+Supabase project URL opens a Claude thread with an import prompt to review;
+Claude reads the source and fills in `company/`. Supabase needs the Supabase MCP
+server or CLI on that machine.
+
+## Sync the brain with a repo
+
+Choose **Sync with a repo** under **Company brain** and enter a GitHub repo or
+any git clone URL. T4 clones it as `company/`. Files that were only in
+`company/` are kept; where the repo has a different version of a file, the
+repo's wins and yours is saved to a backup folder T4 names. **Sync** commits
+what changed here, including agents' edits, pulls, and pushes. If the same file
+changed in both places, Sync stops and lists it so you can merge it in the repo.
+Private repos need git credentials on that machine, such as `gh auth login`.
+**Stop syncing** keeps the files and leaves the repo as it is.
+
+## Company records
+
+People, companies, deals, investors, candidates, and anything else you track live
+in the company brain as plain files. Each folder in `company/` (other than
+`outbox/`) is a collection, and each Markdown file in it is a record, with its
+fields in the frontmatter and notes below. A folder of notes from Obsidian or a
+GitHub repo works as it is. Add People, Companies, Deals, Fundraising, or Hiring
+from **Collection** under **Company brain**, or create your
+own. A collection with stages shows as a board.
+
+Agents, including Muse and Grok Bot, look up records with `t3_brain_find` and
+create or update them with `t3_brain_save`, which also adds dated notes to a
+record's `## Log`. Edits keep the comments and field order you wrote. A
+collection's `README.md` sets its name, its stages (`stages: [lead, won]`), and
+a description agents read.
+
+## Your team
+
+Hire AI employees from **Hire** under **Team** in Settings → Company. Each one is
+a record in `company/agents/` with a role, the provider it runs on (Muse, Grok
+Bot, Claude, or Codex), the collections and channels it works with, and its
+instructions. **Ask for work** starts a thread as that employee, with its
+instructions and the company brain. Change how someone works by editing their
+record under **Company brain → Team**.
+
+## Routines
+
+**Add routine** under **Routines** creates a scheduled task for work that repeats:
+morning triage, weekly pipeline follow-ups, weekly metrics, an investor update,
+social posts, and a Monday plan. A routine runs on this machine on its schedule,
+starts a thread in the company, and shows up with every other task under
+**Settings → Scheduled tasks**, where you can edit its prompt and schedule.
+Pause a routine with its switch, or run it now with the play button.
 
 ## Drafts and sending
 
@@ -22,7 +71,7 @@ Drafts are Markdown files in the company folder's `company/outbox/`, one per
 email or post, with its details in the frontmatter at the top. Agents in the
 company's threads, and Muse or Grok Bot through their tasks, create them with
 `t3_company_draft`; you can also write or edit them yourself. Review a draft in
-the Company hub and send it there. Sending marks the file `sent` with the time
+Settings → Company and send it there. Sending marks the file `sent` with the time
 and, for posts, a link. A failed send is marked `failed` with the reason, and
 you can fix the draft or the account and send it again. Sent drafts cannot be
 sent twice or discarded; they stay as a record.

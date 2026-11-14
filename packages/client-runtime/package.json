@@ -231,6 +231,10 @@
       "types": "./src/state/deviceHubAccess.ts",
       "default": "./src/state/deviceHubAccess.ts"
     },
+    "./state/companyBrain": {
+      "types": "./src/state/companyBrain.ts",
+      "default": "./src/state/companyBrain.ts"
+    },
     "./state/companyChannels": {
       "types": "./src/state/companyChannels.ts",
       "default": "./src/state/companyChannels.ts"

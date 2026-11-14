@@ -8,6 +8,7 @@ import * as Layer from "effect/Layer";
 import { McpServer } from "effect/ai";
 
 import { ServerSecretStore } from "../auth/ServerSecretStore.ts";
+import { CompanyBrain } from "../companyBrain/CompanyBrain.ts";
 import { CompanyChannels } from "../companyChannels/CompanyChannels.ts";
 import { ServerConfig } from "../config.ts";
 import { DeviceService } from "../device/DeviceService.ts";
@@ -53,6 +54,7 @@ import budget from "./agentContextBudget.json" with { type: "json" };
 const toolHandlerServices = Layer.mergeAll(
   Layer.mock(AgentBridgeHub)({}),
   Layer.mock(CompanyChannels)({}),
+  Layer.mock(CompanyBrain)({}),
   Layer.mock(DeviceService)({}),
   Layer.mock(DocumentText)({}),
   Layer.mock(GitVcsDriver)({}),

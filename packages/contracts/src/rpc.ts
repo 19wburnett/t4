@@ -47,6 +47,22 @@ import {
   CompanyOutbox,
 } from "./companyChannels.ts";
 import {
+  CompanyBrainCollection,
+  CompanyBrainCollectionInput,
+  CompanyBrainCollectionList,
+  CompanyBrainCollectionSaveInput,
+  CompanyBrainConnectInput,
+  CompanyBrainConnectResult,
+  CompanyBrainError,
+  CompanyBrainProjectInput,
+  CompanyBrainRecord,
+  CompanyBrainRecordDeleteResult,
+  CompanyBrainRecordInput,
+  CompanyBrainRecordList,
+  CompanyBrainRecordSaveInput,
+  CompanyBrainSource,
+} from "./companyBrain.ts";
+import {
   ChatGptReconnectProfileInput,
   ChatGptReconnectProfile,
   ChatGptImportProfileInput,
@@ -552,6 +568,16 @@ export const WS_METHODS = {
   companyChannelsSaveDraft: "companyChannels.saveDraft",
   companyChannelsDiscardDraft: "companyChannels.discardDraft",
   companyChannelsSend: "companyChannels.send",
+  companyBrainListCollections: "companyBrain.listCollections",
+  companyBrainListRecords: "companyBrain.listRecords",
+  companyBrainReadRecord: "companyBrain.readRecord",
+  companyBrainSaveRecord: "companyBrain.saveRecord",
+  companyBrainDeleteRecord: "companyBrain.deleteRecord",
+  companyBrainSaveCollection: "companyBrain.saveCollection",
+  companyBrainSourceStatus: "companyBrain.sourceStatus",
+  companyBrainConnect: "companyBrain.connect",
+  companyBrainSync: "companyBrain.sync",
+  companyBrainDisconnect: "companyBrain.disconnect",
   serverUpdateSettings: "server.updateSettings",
   serverDiscoverSourceControl: "server.discoverSourceControl",
   serverSearchAcpRegistry: "server.searchAcpRegistry",
@@ -948,6 +974,68 @@ const WsCompanyChannelsSendRpc = Rpc.make(WS_METHODS.companyChannelsSend, {
   payload: CompanyDraftInput,
   success: CompanyDraft,
   error: companyChannelErrors,
+});
+
+const companyBrainErrors = Schema.Union([CompanyBrainError, EnvironmentAuthorizationError]);
+
+const WsCompanyBrainListCollectionsRpc = Rpc.make(WS_METHODS.companyBrainListCollections, {
+  payload: CompanyBrainProjectInput,
+  success: CompanyBrainCollectionList,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainListRecordsRpc = Rpc.make(WS_METHODS.companyBrainListRecords, {
+  payload: CompanyBrainCollectionInput,
+  success: CompanyBrainRecordList,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainReadRecordRpc = Rpc.make(WS_METHODS.companyBrainReadRecord, {
+  payload: CompanyBrainRecordInput,
+  success: CompanyBrainRecord,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainSaveRecordRpc = Rpc.make(WS_METHODS.companyBrainSaveRecord, {
+  payload: CompanyBrainRecordSaveInput,
+  success: CompanyBrainRecord,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainDeleteRecordRpc = Rpc.make(WS_METHODS.companyBrainDeleteRecord, {
+  payload: CompanyBrainRecordInput,
+  success: CompanyBrainRecordDeleteResult,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainSaveCollectionRpc = Rpc.make(WS_METHODS.companyBrainSaveCollection, {
+  payload: CompanyBrainCollectionSaveInput,
+  success: CompanyBrainCollection,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainSourceStatusRpc = Rpc.make(WS_METHODS.companyBrainSourceStatus, {
+  payload: CompanyBrainProjectInput,
+  success: CompanyBrainSource,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainConnectRpc = Rpc.make(WS_METHODS.companyBrainConnect, {
+  payload: CompanyBrainConnectInput,
+  success: CompanyBrainConnectResult,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainSyncRpc = Rpc.make(WS_METHODS.companyBrainSync, {
+  payload: CompanyBrainProjectInput,
+  success: CompanyBrainSource,
+  error: companyBrainErrors,
+});
+
+const WsCompanyBrainDisconnectRpc = Rpc.make(WS_METHODS.companyBrainDisconnect, {
+  payload: CompanyBrainProjectInput,
+  success: CompanyBrainSource,
+  error: companyBrainErrors,
 });
 
 const WsServerUpdateSettingsRpc = Rpc.make(WS_METHODS.serverUpdateSettings, {
@@ -2185,6 +2273,16 @@ export const WsRpcGroup = RpcGroup.make(
   WsCompanyChannelsSaveDraftRpc,
   WsCompanyChannelsDiscardDraftRpc,
   WsCompanyChannelsSendRpc,
+  WsCompanyBrainListCollectionsRpc,
+  WsCompanyBrainListRecordsRpc,
+  WsCompanyBrainReadRecordRpc,
+  WsCompanyBrainSaveRecordRpc,
+  WsCompanyBrainDeleteRecordRpc,
+  WsCompanyBrainSaveCollectionRpc,
+  WsCompanyBrainSourceStatusRpc,
+  WsCompanyBrainConnectRpc,
+  WsCompanyBrainSyncRpc,
+  WsCompanyBrainDisconnectRpc,
   WsServerDiscoverSourceControlRpc,
   WsServerSearchAcpRegistryRpc,
   WsServerPrepareAcpRegistryAgentRpc,

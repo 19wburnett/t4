@@ -93,7 +93,7 @@ export function CompanyChannelsSection(
     <section aria-labelledby={CHANNELS_SECTION_ID} className="flex flex-col gap-3">
       <div className="flex items-center gap-2">
         <h2 id={CHANNELS_SECTION_ID} className="text-sm font-medium text-muted-foreground">
-          Channels
+          Email & social accounts
         </h2>
         <Button
           size="xs"

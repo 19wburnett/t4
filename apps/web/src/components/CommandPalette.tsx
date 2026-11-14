@@ -1717,8 +1717,12 @@ function OpenCommandPaletteDialog(props: {
       icon: <BuildingIcon className={ITEM_ICON_CLASS} />,
       run: async () => {
         await navigate({
-          to: "/company/$projectKey",
-          params: { projectKey: contextualProjectGroup.projectKey },
+          to: "/settings/company",
+          search: {
+            project: contextualProjectGroup.projectKey,
+            machine: undefined,
+            checkout: undefined,
+          },
         });
       },
     });

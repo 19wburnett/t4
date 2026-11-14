@@ -49,6 +49,8 @@ import { EnvironmentToolkit } from "./toolkits/environment/tools.ts";
 import { AgentBridgeToolkit } from "./toolkits/agentBridge/tools.ts";
 import * as AgentBridgeHandlers from "./toolkits/agentBridge/handlers.ts";
 import * as AgentBridgeService from "../agentBridge/AgentBridgeService.ts";
+import { CompanyBrainToolkit } from "./toolkits/companyBrain/tools.ts";
+import * as CompanyBrainHandlers from "./toolkits/companyBrain/handlers.ts";
 import { CompanyChannelsToolkit } from "./toolkits/companyChannels/tools.ts";
 import * as CompanyChannelsHandlers from "./toolkits/companyChannels/handlers.ts";
 import * as EnvironmentHandlers from "./toolkits/environment/handlers.ts";
@@ -1128,6 +1130,11 @@ const layerCompanyChannelsToolkit = toolkitRegistration(
   CompanyChannelsHandlers.layer,
 );
 
+const layerCompanyBrainToolkit = toolkitRegistration(
+  CompanyBrainToolkit,
+  CompanyBrainHandlers.layer,
+);
+
 export const layerProjectRegistration = toolkitRegistration(ProjectToolkit, ProjectHandlers.layer);
 
 export const layerAttachmentToolkit = toolkitRegistration(
@@ -1178,6 +1185,7 @@ export const layerTools = Layer.mergeAll(
   layerHtmlToolkit,
   layerAgentBridgeToolkit,
   layerCompanyChannelsToolkit,
+  layerCompanyBrainToolkit,
 );
 
 export const layer = layerTools.pipe(Layer.provideMerge(layerMcpTransport));
