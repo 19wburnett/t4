@@ -7,6 +7,7 @@ import {
 import {
   BROWSER_IMPORT_FAILURE_COPY,
   type BrowserCredential,
+  type BrowserCredentialImportEntry,
   type BrowserCredentialImportResult,
   type BrowserCredentialManagerStatus,
   type BrowserImportSource,
@@ -14,7 +15,7 @@ import {
   type EnvironmentId,
 } from "@t3tools/contracts";
 import { Trash2Icon } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { previewBridge } from "~/components/preview/previewBridge";
 import { isElectron } from "~/env";
@@ -45,6 +46,7 @@ import { importFailureReason } from "./browserImportWizard.logic";
 import {
   filterSavedLogins,
   offersBrowserPasswordImport,
+  parsePasswordCsv,
   passwordManagerStatusCopy,
   savedLoginHost,
 } from "./savedLogins.logic";
@@ -54,6 +56,7 @@ import { searchableSetting } from "./settingsSearch";
 
 const FILTER_THRESHOLD = 8;
 const MAX_RENDERED_LOGINS = 200;
+const MAX_CSV_BYTES = 20 * 1024 * 1024;
 
 type Notice = { readonly tone: "error" | "info"; readonly text: string } | null;
 
@@ -160,9 +163,41 @@ function LoginsRow({
       setPending(null);
       return;
     }
+    await submitImport(`${source.name} (${profile.name})`, entries);
+  };
+
+  const csvInput = useRef<HTMLInputElement>(null);
+  const importCsv = async (file: File) => {
+    if (busy) return;
+    setNotice(null);
+    if (file.size > MAX_CSV_BYTES) {
+      setNotice({ tone: "error", text: "That file is too large to be a password export." });
+      return;
+    }
+    setPending("import");
+    const entries = parsePasswordCsv(await file.text());
+    if (entries === null || entries.length === 0) {
+      setPending(null);
+      setNotice({
+        tone: "error",
+        text:
+          entries === null
+            ? "That file has no url and password columns. Export passwords as CSV from your browser or password manager."
+            : "No logins with a site and password were found in that file.",
+      });
+      return;
+    }
+    // Re-importing a file with the same name replaces its earlier logins.
+    await submitImport(`CSV (${file.name})`, entries);
+  };
+
+  const submitImport = async (
+    sourceName: string,
+    entries: ReadonlyArray<BrowserCredentialImportEntry>,
+  ) => {
     const result = await runImport({
       environmentId,
-      input: { sourceName: `${source.name} (${profile.name})`.slice(0, 128), entries },
+      input: { sourceName: sourceName.slice(0, 128), entries },
     });
     setPending(null);
     setNotice(
@@ -197,8 +232,33 @@ function LoginsRow({
               : null
       }
       control={
-        importOffered || (canRemove && credentials !== null && credentials.length > 0) ? (
+        canImport || (canRemove && credentials !== null && credentials.length > 0) ? (
           <>
+            {canImport ? (
+              <>
+                <input
+                  ref={csvInput}
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="sr-only"
+                  tabIndex={-1}
+                  aria-hidden
+                  onChange={(event) => {
+                    const file = event.target.files?.[0];
+                    event.target.value = "";
+                    if (file) void importCsv(file);
+                  }}
+                />
+                <Button
+                  size="sm"
+                  variant="outline"
+                  disabled={busy}
+                  onClick={() => csvInput.current?.click()}
+                >
+                  Import CSV
+                </Button>
+              </>
+            ) : null}
             {importOffered ? (
               <BrowserPasswordImportMenu
                 disabled={busy}
