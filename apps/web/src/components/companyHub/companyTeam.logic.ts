@@ -4,23 +4,15 @@ import type {
   CompanyBrainRecordSummary,
 } from "@t3tools/contracts";
 
-import { BRIDGE_AGENTS, COMPANY_DIR, type WorkTaskTarget } from "./companyHub.logic";
+import {
+  EMPLOYEE_PROVIDER_LABELS,
+  type EmployeeProvider,
+  employeeProviderOf,
+} from "@t3tools/shared/companyTeam";
 
-/** An employee is a record in the brain, so agents and people share one place for the team. */
-export const TEAM_COLLECTION = "agents";
+import { BRIDGE_AGENTS, type WorkTaskTarget } from "./companyHub.logic";
 
 export const TEAM_COLLECTION_LABEL = "Team";
-
-const EMPLOYEE_PROVIDERS = ["muse", "grok", "claude", "codex"] as const;
-
-export type EmployeeProvider = (typeof EMPLOYEE_PROVIDERS)[number];
-
-export const EMPLOYEE_PROVIDER_LABELS: Record<EmployeeProvider, string> = {
-  muse: "Muse",
-  grok: "Grok Bot",
-  claude: "Claude",
-  codex: "Codex",
-};
 
 /** Where this kind of employee runs. The role lives in the record; the runtime is a setting. */
 export function employeeTargetOf(provider: EmployeeProvider): WorkTaskTarget {
@@ -147,17 +139,13 @@ const listField = (fields: CompanyBrainFields, key: string): ReadonlyArray<strin
 };
 
 export function employeeFromRecord(record: CompanyBrainRecordSummary): Employee {
-  const provider = EMPLOYEE_PROVIDERS.find(
-    (candidate) => candidate === textField(record.fields, "provider").toLowerCase(),
-  );
-  const role = textField(record.fields, "role") || record.title;
+  const provider = employeeProviderOf(record.fields);
   return {
     recordId: record.id,
     name: record.title,
-    role,
-    // A record without a provider still shows; Muse is the general work agent.
-    provider: provider ?? "muse",
-    providerLabel: EMPLOYEE_PROVIDER_LABELS[provider ?? "muse"],
+    role: textField(record.fields, "role") || record.title,
+    provider,
+    providerLabel: EMPLOYEE_PROVIDER_LABELS[provider],
   };
 }
 
@@ -171,28 +159,6 @@ export const employeeFields = (template: EmployeeTemplate): CompanyBrainFields =
 
 export const employeeBody = (template: EmployeeTemplate): string =>
   `# Instructions\n\n${template.instructions}\n`;
-
-/** The thread opens with the employee's role, then the work; the brain is read from the project. */
-export function buildEmployeePrompt(
-  employee: Pick<Employee, "name" | "role">,
-  instructions: string,
-  task: string,
-): string {
-  const role =
-    employee.name === employee.role
-      ? `You are our ${employee.role}.`
-      : `You are ${employee.name}, our ${employee.role}.`;
-  const instructionsText = instructions.trim();
-  const taskText = task.trim();
-  return [
-    role,
-    instructionsText,
-    taskText,
-    `Read ${COMPANY_DIR}/BRAIN.md and the records in ${COMPANY_DIR}/ before you start, and save what you learn with t3_brain_save. Ask me before sending or publishing anything.`,
-  ]
-    .filter((part) => part !== "")
-    .join("\n\n");
-}
 
 export function employeeCollections(record: CompanyBrainRecordSummary): ReadonlyArray<string> {
   return listField(record.fields, "collections");

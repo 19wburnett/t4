@@ -17,6 +17,7 @@ import * as CompanyBrain from "../../../companyBrain/CompanyBrain.ts";
 import * as ThreadManagementService from "../../../orchestration-v2/ThreadManagementService.ts";
 import * as PeerForwarding from "../../../peer/PeerForwarding.ts";
 import * as McpInvocationContext from "../../McpInvocationContext.ts";
+import * as CompanyTeam from "../../../companyBrain/CompanyTeam.ts";
 import * as McpToolAccess from "../../McpToolAccess.ts";
 import { callerLabel, companyProject } from "../companyChannels/handlers.ts";
 import { CompanyBrainToolkit, TeamActivityTool } from "./tools.ts";
@@ -119,7 +120,7 @@ const rowOf = (environmentId: EnvironmentId, thread: OrchestrationV2ThreadShell)
         ? "answer"
         : "approval",
   memberId: thread.memberId ?? null,
-  employeeId: thread.employeeId ?? null,
+  employeeId: thread.bot ?? null,
   updatedAt: DateTime.formatIso(thread.updatedAt),
 });
 
@@ -370,4 +371,5 @@ export const layer = McpToolAccess.toLayer(CompanyBrainToolkit, {
       }
     }),
   ),
+  t3_bot_message: McpToolAccess.actsAsCaller(CompanyTeam.messageBot),
 });

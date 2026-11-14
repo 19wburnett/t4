@@ -11,6 +11,7 @@ import {
   type OrchestrationV2Actor,
   type OrchestrationV2CreationSource,
   type OrchestrationV2DelegatedFrom,
+  type OrchestrationV2ThreadBot,
   type OrchestrationV2LinkOrigin,
   type OrchestrationV2ProviderThreadNativeMetadata,
   type OrchestrationV2ThreadProjection,
@@ -106,7 +107,7 @@ export interface ThreadLaunchInput {
   readonly delegatedFrom?: OrchestrationV2DelegatedFrom;
   /** The company member this launch is for; only the server sets it. */
   readonly memberId?: string;
-  readonly employeeId?: string;
+  readonly bot?: OrchestrationV2ThreadBot;
 }
 
 type PreparationInput = Pick<
@@ -925,6 +926,7 @@ const make = Effect.gen(function* () {
                   ? {}
                   : { delegatedFrom: input.delegatedFrom }),
                 ...companyFieldsOf(input),
+                ...(input.bot === undefined ? {} : { bot: input.bot }),
                 createdBy: input.createdBy,
                 creationSource: input.creationSource,
               });

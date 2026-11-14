@@ -1137,7 +1137,7 @@ const layerConnectorsToolkit = toolkitRegistration(ConnectorsToolkit, Connectors
 const layerCompanyBrainToolkit = toolkitRegistration(
   CompanyBrainToolkit,
   CompanyBrainHandlers.layer,
-);
+).pipe(Layer.provide(OrchestratorMcpService.layer));
 
 export const layerProjectRegistration = toolkitRegistration(ProjectToolkit, ProjectHandlers.layer);
 

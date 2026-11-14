@@ -49,12 +49,22 @@ a description agents read.
 
 ## Your team
 
-Hire AI employees from **Hire** under **Team** in Settings → Company. Each one is
-a record in `company/agents/` with a role, the provider it runs on (Muse, Grok
-Bot, Claude, or Codex), the collections and channels it works with, and its
-instructions. **Ask for work** starts a thread as that employee, with its
-instructions and the company brain. Change how someone works by editing their
-record under **Company brain → Team**.
+Hire AI employees, or bots, from **Hire** under **Team** in Settings → Company.
+Each one is a record in `company/agents/` with a role, the provider it runs on
+(Muse, Grok Bot, Claude, or Codex), the collections and channels it works with,
+and its instructions. Change how someone works by editing their record under
+**Company brain → Team**.
+
+Each bot keeps its own threads. The **Bots** section at the top of the sidebar
+lists the bots of the company you last opened, with each bot's threads under
+it. **+** next to a bot, or **New thread** on its card in Settings → Company,
+starts another thread with that bot, its instructions, and the company brain.
+
+Bots can message each other. When one bot's work fits a teammate better, it
+messages that teammate with `t3_bot_message`. The teammate works on it in a
+thread of its own, listed under its name, and its answer goes back to the bot
+that asked. The thread shows up under the bot that asked as well, as a
+delegated task.
 
 ## People
 

@@ -1,6 +1,7 @@
 import { expect, it } from "@effect/vitest";
 import {
   CommandId,
+  CompanyBrainRecordId,
   EnvironmentId,
   MessageId,
   type OrchestrationV2Command,
@@ -65,7 +66,7 @@ it("stamps authoritative provenance on commands that create threads or messages"
     },
     // Nor claim to be a teammate; the AI employee is the client's to name.
     memberId: "forged-member",
-    employeeId: "marketer",
+    bot: CompanyBrainRecordId.make("marketer"),
   };
 
   const stamped = ThreadManagementService.withCreationProvenance(command, {
@@ -75,7 +76,7 @@ it("stamps authoritative provenance on commands that create threads or messages"
   expect(stamped).toMatchObject({
     createdBy: "user",
     creationSource: "web",
-    employeeId: "marketer",
+    bot: "marketer",
   });
   expect(stamped).not.toHaveProperty("linkOrigin");
   expect(stamped).not.toHaveProperty("delegatedFrom");
@@ -86,7 +87,7 @@ it("stamps authoritative provenance on commands that create threads or messages"
     creationSource: "web",
     memberId: "sam",
   });
-  expect(byMember).toMatchObject({ memberId: "sam", employeeId: "marketer" });
+  expect(byMember).toMatchObject({ memberId: "sam", bot: "marketer" });
   const fork = ThreadManagementService.withCreationProvenance(
     {
       type: "thread.fork",

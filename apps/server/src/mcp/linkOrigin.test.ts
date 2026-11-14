@@ -4,6 +4,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { assert, it } from "@effect/vitest";
 import {
   CommandId,
+  CompanyBrainRecordId,
   companyFieldsOf,
   ContextTransferId,
   EnvironmentId,
@@ -430,17 +431,16 @@ it.layer(Layer.provideMerge(layerTools, layerOrchestration))("work a link starts
             interactionMode: "default",
             branch: null,
             worktreePath: null,
-            employeeId: "marketer",
+            bot: CompanyBrainRecordId.make("marketer"),
             createdBy: "user",
             creationSource: "web",
           },
           { createdBy: "user", creationSource: "web", memberId: "sam" },
         ),
       );
-      assert.deepEqual(companyFieldsOf((yield* projections.getThreadShell(samsThreadId)) ?? {}), {
-        memberId: "sam",
-        employeeId: "marketer",
-      });
+      const shell = yield* projections.getThreadShell(samsThreadId);
+      assert.deepEqual(companyFieldsOf(shell ?? {}), { memberId: "sam" });
+      assert.equal(shell?.bot, "marketer");
 
       const thread = (yield* threads.getThreadProjection(samsThreadId)).thread;
       const child = makeSubagentChildThread({
@@ -455,7 +455,9 @@ it.layer(Layer.provideMerge(layerTools, layerOrchestration))("work a link starts
         createdBy: "agent",
         creationSource: "mcp",
       });
-      assert.deepEqual(companyFieldsOf(child), { memberId: "sam", employeeId: "marketer" });
+      // The member carries over to subagents; the bot does not.
+      assert.deepEqual(companyFieldsOf(child), { memberId: "sam" });
+      assert.equal(child.bot, undefined);
     }),
   );
 });

@@ -13,7 +13,7 @@ const thread = (
   id: string,
   fields: {
     readonly memberId?: string;
-    readonly employeeId?: string;
+    readonly bot?: string;
     readonly archived?: boolean;
     readonly subagent?: boolean;
     readonly at?: string;
@@ -24,7 +24,7 @@ const thread = (
   return presentThreadShell(fields.on ?? environmentId, {
     ...base,
     ...(fields.memberId === undefined ? {} : { memberId: fields.memberId }),
-    ...(fields.employeeId === undefined ? {} : { employeeId: fields.employeeId }),
+    ...(fields.bot === undefined ? {} : { bot: CompanyBrainRecordId.make(fields.bot) }),
     archivedAt: fields.archived ? DateTime.makeUnsafe("2026-11-01T00:00:00.000Z") : null,
     updatedAt: DateTime.makeUnsafe(fields.at ?? "2026-11-10T00:00:00.000Z"),
     lineage: fields.subagent
@@ -61,7 +61,7 @@ describe("everyoneSummaries", () => {
     const threads = [
       thread("owner-own"),
       thread("sam-direct", { memberId: "sam", at: "2026-11-12T00:00:00.000Z" }),
-      thread("sam-asks-marketer", { memberId: "sam", employeeId: "marketer" }),
+      thread("sam-asks-marketer", { memberId: "sam", bot: "marketer" }),
       // A removed teammate's work stays visible, under the owner.
       thread("removed-teammate", { memberId: "alex" }),
       // Sam works on their own computer without a member session there.

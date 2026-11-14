@@ -440,14 +440,13 @@ export class OrchestratorV2 extends Context.Service<OrchestratorV2, Orchestrator
   "t3/orchestration-v2/Orchestrator/OrchestratorV2",
 ) {}
 
-/** A fork belongs to whoever forked it and keeps the source's AI employee. */
+/** A fork belongs to whoever forked it, not to whoever started the source. */
 function forkCompanyFields(
   target: OrchestrationV2AppThread,
-  source: Pick<OrchestrationV2AppThread, "employeeId">,
   memberId: string | undefined,
 ): OrchestrationV2AppThread {
-  const { memberId: _memberId, employeeId: _employeeId, ...rest } = target;
-  return { ...rest, ...companyFieldsOf({ memberId, employeeId: source.employeeId }) };
+  const { memberId: _memberId, ...rest } = target;
+  return { ...rest, ...companyFieldsOf({ memberId }) };
 }
 
 /** Run ordinals can skip values: a queued run moves past newer runs when it starts. */
@@ -2700,6 +2699,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       ...(command.linkOrigin === undefined || command.delegatedFrom === undefined
         ? {}
         : { delegatedFrom: command.delegatedFrom }),
+      ...(command.bot === undefined ? {} : { bot: command.bot }),
       lineage: {
         parentThreadId: null,
         relationshipToParent: null,
@@ -4363,7 +4363,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
       threadId: command.targetThreadId,
       providerInstanceId: targetThread.providerInstanceId,
       occurredAt: now,
-      payload: forkCompanyFields(targetThread, sourceProjection.thread, command.memberId),
+      payload: forkCompanyFields(targetThread, command.memberId),
     });
     yield* emitEvent({
       type: "context-transfer.created",
@@ -7579,6 +7579,7 @@ const makeOrchestrator = Effect.fn("orchestrationV2.Orchestrator.layer")(functio
         runtimeMode: command.runtimeMode,
         interactionMode: command.interactionMode,
         ...(command.workspaceStrategy === undefined ? {} : { branch: null, worktreePath: null }),
+        ...(command.bot === undefined ? {} : { bot: command.bot }),
       };
       const task: OrchestrationV2Subagent = {
         id: taskNodeId,

@@ -13,6 +13,7 @@ import {
   type NodeId,
   type OrchestrationV2Command,
   type OrchestrationV2CreationSource,
+  type OrchestrationV2ThreadBot,
   type PlanId,
   type ProjectId,
   type ProjectIconOverride,
@@ -155,8 +156,7 @@ interface StartThreadBootstrap {
     readonly branch: string | null;
     readonly worktreePath: string | null;
     readonly createdAt: string;
-    /** The AI employee (a `company/agents` record id) the new thread works as. */
-    readonly employeeId?: string;
+    readonly bot?: OrchestrationV2ThreadBot;
   };
   readonly prepareWorktree?: {
     readonly requireWorktree?: boolean;
@@ -723,7 +723,7 @@ export const startThreadTurn = Effect.fn("EnvironmentCommands.startThreadTurn")(
       runtimeMode: input.runtimeMode,
       interactionMode: input.interactionMode,
       workspaceStrategy,
-      ...(bootstrap?.employeeId === undefined ? {} : { employeeId: bootstrap.employeeId }),
+      ...(bootstrap?.bot === undefined ? {} : { bot: bootstrap.bot }),
       initialMessage: {
         messageId: input.message.messageId,
         text: input.message.text,

@@ -2104,6 +2104,7 @@ export const layerWsRpc = (
                     runtimeMode: input.runtimeMode,
                     interactionMode: input.interactionMode,
                     workspaceStrategy: input.workspaceStrategy,
+                    ...(input.bot === undefined ? {} : { bot: input.bot }),
                     ...(input.initialMessage === undefined
                       ? {}
                       : {
@@ -2120,10 +2121,7 @@ export const layerWsRpc = (
                         }),
                     createdBy: "user",
                     creationSource: input.creationSource ?? "web",
-                    ...companyFieldsOf({
-                      memberId: currentMemberId,
-                      employeeId: input.employeeId,
-                    }),
+                    ...companyFieldsOf({ memberId: currentMemberId }),
                   }).pipe(Effect.provide(intakeContext)),
                 )
                 .pipe(

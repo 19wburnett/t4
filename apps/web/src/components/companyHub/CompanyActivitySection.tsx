@@ -25,7 +25,8 @@ import {
   threadStarterName,
 } from "./companyPeople.logic";
 import { machineOwners } from "./companyMachines.logic";
-import { employeeFromRecord, TEAM_COLLECTION } from "./companyTeam.logic";
+import { TEAM_COLLECTION } from "@t3tools/shared/companyTeam";
+import { employeeFromRecord } from "./companyTeam.logic";
 import { useCompanyMachines, useCompanyRecords } from "./useCompanyRecords";
 
 const OWNER_LABEL = "Owner";

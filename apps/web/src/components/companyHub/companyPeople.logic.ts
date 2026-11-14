@@ -113,7 +113,8 @@ function starterOf(thread: EnvironmentThreadShell, credit: Credit): string | nul
     : null;
 }
 
-const threadEmployeeId = (thread: EnvironmentThreadShell) => thread.source.employeeId ?? null;
+/** The AI employee a thread works as: its bot. */
+const threadEmployeeId = (thread: EnvironmentThreadShell) => thread.source.bot ?? null;
 
 export interface ActorSummary {
   readonly key: string;

@@ -6,6 +6,7 @@ import {
   type ProjectId,
 } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
+import { EMPLOYEE_PROVIDER_LABELS, TEAM_COLLECTION } from "@t3tools/shared/companyTeam";
 import { AsyncResult } from "effect/reactivity";
 import { ArrowRightIcon, PlusIcon, UsersIcon } from "lucide-react";
 import { useState } from "react";
@@ -29,8 +30,6 @@ import { Textarea } from "../ui/textarea";
 import { stackedThreadToast, toastManager } from "../ui/toast";
 import { brainFailure } from "./companyBrain.logic";
 import {
-  buildEmployeePrompt,
-  EMPLOYEE_PROVIDER_LABELS,
   EMPLOYEE_TEMPLATES,
   type Employee,
   type EmployeeTemplate,
@@ -38,11 +37,9 @@ import {
   employeeCollections,
   employeeFields,
   employeeFromRecord,
-  employeeTargetOf,
-  TEAM_COLLECTION,
   TEAM_COLLECTION_LABEL,
 } from "./companyTeam.logic";
-import { useStartWorkThread } from "./useStartWorkThread";
+import { useStartBotThread } from "./useStartBotThread";
 
 const TEAM_DESCRIPTION =
   "The AI employees that work on this company. One file per employee, with the role, where it runs, and its instructions.";
@@ -245,14 +242,14 @@ function EmployeeCard(props: {
         </span>
       ) : null}
       <Button size="xs" variant="outline" className="mt-1 self-start" onClick={props.onAsk}>
-        Ask for work
+        New thread
         <ArrowRightIcon aria-hidden />
       </Button>
     </div>
   );
 }
 
-function AskEmployeeDialog(props: {
+export function AskEmployeeDialog(props: {
   readonly environmentId: EnvironmentId;
   readonly projectId: ProjectId;
   readonly employee: Employee;
@@ -269,18 +266,21 @@ function AskEmployeeDialog(props: {
     }),
   );
   const instructions = AsyncResult.getOrElse(record, () => null)?.body ?? "";
-  const startWorkThread = useStartWorkThread();
+  const startBotThread = useStartBotThread();
   const [task, setTask] = useState("");
+  const [starting, setStarting] = useState(false);
 
-  const submit = () => {
-    if (task.trim() === "") return;
-    void startWorkThread(
+  const submit = async () => {
+    if (task.trim() === "" || starting) return;
+    setStarting(true);
+    const started = await startBotThread(
       { environmentId: props.environmentId, id: props.projectId },
-      buildEmployeePrompt(props.employee, instructions, task),
-      employeeTargetOf(props.employee.provider),
-      { employeeId: props.employee.recordId },
+      props.employee,
+      instructions,
+      task,
     );
-    props.onClose();
+    setStarting(false);
+    if (started) props.onClose();
   };
 
   return (
@@ -292,9 +292,10 @@ function AskEmployeeDialog(props: {
     >
       <DialogPopup className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>Ask {props.employee.name} for work</DialogTitle>
+          <DialogTitle>New thread with {props.employee.name}</DialogTitle>
           <DialogDescription>
-            Starts a thread as {props.employee.name}, with their instructions and the company brain.
+            {props.employee.name} works on it with their instructions and the company brain, and can
+            message teammates for help.
           </DialogDescription>
         </DialogHeader>
         <DialogPanel>
@@ -304,12 +305,15 @@ function AskEmployeeDialog(props: {
             placeholder={`What should ${props.employee.name} do?`}
             value={task}
             onChange={(event) => setTask(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && (event.metaKey || event.ctrlKey)) void submit();
+            }}
             rows={4}
           />
         </DialogPanel>
         <DialogFooter>
           <DialogClose render={<Button variant="outline" size="sm" />}>Cancel</DialogClose>
-          <Button size="sm" disabled={task.trim() === ""} onClick={submit}>
+          <Button size="sm" disabled={task.trim() === "" || starting} onClick={() => void submit()}>
             Start
           </Button>
         </DialogFooter>
