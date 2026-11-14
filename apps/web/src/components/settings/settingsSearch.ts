@@ -17,6 +17,7 @@ import type { ResolvedSettingsScope } from "./settingsScope";
 
 export type SettingsPath =
   | "/settings/company"
+  | "/settings/connectors"
   | "/settings/projects"
   | "/settings/general"
   | "/settings/diagnostics"
@@ -89,6 +90,7 @@ export interface SettingsSearchAvailability {
 export const SETTINGS_SECTION_LABELS: Readonly<Record<SettingsPath, string>> = {
   "/settings/diagnostics": "Diagnostics",
   "/settings/company": "Company",
+  "/settings/connectors": "Connectors",
   "/settings/projects": "Projects",
   "/settings/general": "General",
   "/settings/appearance": "Appearance",
@@ -136,6 +138,7 @@ export const SETTINGS_NAV_GROUPS: ReadonlyArray<{
     heading: "Agents",
     paths: [
       "/settings/providers",
+      "/settings/connectors",
       "/settings/threads",
       "/settings/browser",
       "/settings/devices",
@@ -1177,6 +1180,14 @@ export const SETTINGS_SEARCH_ITEMS = [
     ],
   },
   {
+    id: "connectors",
+    title: "Connectors",
+    to: "/settings/connectors",
+    searchTerms: [
+      "mcp server connector integration tools linear notion stripe github slack api key token",
+    ],
+  },
+  {
     id: "secret-providers",
     title: "Secret providers",
     to: "/settings/secrets",
@@ -1206,6 +1217,7 @@ const SEARCH_ITEMS_BY_ID = new Map(SETTINGS_SEARCH_ITEMS.map((item) => [item.id,
 const SETTINGS_CATEGORY_SCOPES: Readonly<Record<SettingsPath, SettingsSearchScope | null>> = {
   "/settings/diagnostics": "environment",
   "/settings/company": "project",
+  "/settings/connectors": null,
   "/settings/projects": "project",
   "/settings/general": null,
   "/settings/appearance": null,

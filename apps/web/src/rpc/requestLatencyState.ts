@@ -34,6 +34,7 @@ const untrackedRpcAckMethods = new Set<string>([
   WS_METHODS.serverReportClientActivity,
   WS_METHODS.sourceControlSignInWait,
   WS_METHODS.companyChannelsMicrosoftSignInWait,
+  WS_METHODS.connectorsGoogleSignInWait,
 ]);
 const longRunningRpcAckMethods = new Set<string>([
   WS_METHODS.serverUpdateProvider,
@@ -45,6 +46,9 @@ const longRunningRpcAckMethods = new Set<string>([
   WS_METHODS.companyChannelsListInbox,
   WS_METHODS.companyChannelsReadMessage,
   WS_METHODS.companyChannelsSend,
+  // Each one connects to the connector's MCP server.
+  WS_METHODS.connectorsSave,
+  WS_METHODS.connectorsRefresh,
 ]);
 
 const slowRpcAckRequestsAtom = Atom.make<ReadonlyArray<SlowRpcAckRequest>>([]).pipe(
