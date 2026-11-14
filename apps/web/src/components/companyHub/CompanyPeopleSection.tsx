@@ -425,7 +425,7 @@ function InviteDialog(props: {
 }
 
 /** Mints a fresh one-use link each time it opens: links are single-use by design. */
-function InviteLinkDialog(props: {
+export function InviteLinkDialog(props: {
   readonly environmentId: EnvironmentId;
   readonly member: Member;
   readonly onClose: () => void;

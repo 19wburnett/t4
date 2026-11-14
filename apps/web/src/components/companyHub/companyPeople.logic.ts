@@ -3,7 +3,6 @@ import type {
   CompanyBrainFields,
   CompanyBrainRecordId,
   CompanyBrainRecordSummary,
-  ProjectId,
 } from "@t3tools/contracts";
 
 import { resolveDesktopPairingUrl, resolveHostedPairingUrl } from "../settings/pairingUrls";
@@ -140,11 +139,14 @@ export function employeeThreads(
   return activityThreads(threads).filter((thread) => threadEmployeeId(thread) === employeeId);
 }
 
+/** `projectKey` is `<environmentId>:<projectId>`: project ids are only unique per machine. */
 export function projectThreads(
   threads: ReadonlyArray<EnvironmentThreadShell>,
-  projectId: ProjectId,
+  projectKey: string,
 ): ReadonlyArray<EnvironmentThreadShell> {
-  return activityThreads(threads).filter((thread) => thread.projectId === projectId);
+  return activityThreads(threads).filter(
+    (thread) => `${thread.environmentId}:${thread.projectId}` === projectKey,
+  );
 }
 
 /**

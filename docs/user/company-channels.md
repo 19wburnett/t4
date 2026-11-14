@@ -73,9 +73,18 @@ user, so invite people you trust with it.
 **Remove from company** signs them out of this machine, cancels unused links,
 and deletes their record. Their threads stay.
 
+## Machines
+
+A company can work on more than one machine. **Add machine** under **Machines**
+lists the other T4 machines you are connected to (add one in Settings →
+Environments first) and saves your pick to `company/machines/`. On a machine
+where you are an admin, **Manage access** gives a teammate an invite link for
+that machine, or takes their access away. **Remove from company** takes the
+machine off the list without changing who can use it.
+
 ## Activity
 
-**Activity** shows what everyone on this machine is doing, one view at a time:
+**Activity** shows what everyone on the company's machines is doing, one view at a time:
 **Everyone** has a card per person and AI employee; click one to see their
 threads. **People**, **AI employees**, and **Projects** list the threads for
 the one you pick. Agents see the same views with `t3_team_activity`, so they
