@@ -93,6 +93,12 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.companyBrainDisconnect]: AuthSourceControlWriteScope,
   // Sending acts as the account with its saved credentials: whoever may change them.
   [WS_METHODS.companyChannelsSend]: AuthSettingsWriteScope,
+  // Connectors hold credentials every agent here acts with, like the secrets Settings saves.
+  [WS_METHODS.connectorsSave]: AuthSettingsWriteScope,
+  [WS_METHODS.connectorsRemove]: AuthSettingsWriteScope,
+  [WS_METHODS.connectorsRefresh]: AuthSettingsWriteScope,
+  [WS_METHODS.connectorsGoogleSignInStart]: AuthSettingsWriteScope,
+  [WS_METHODS.connectorsGoogleSignInWait]: AuthSettingsWriteScope,
 } as const;
 export type ClientGuardedRpcTag = keyof typeof CLIENT_GUARDED_RPC_SCOPES;
 
