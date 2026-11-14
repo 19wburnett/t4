@@ -47,6 +47,17 @@ import {
   CompanyOutbox,
 } from "./companyChannels.ts";
 import {
+  Connector,
+  ConnectorError,
+  ConnectorGoogleSignIn,
+  ConnectorGoogleSignInStartInput,
+  ConnectorGoogleSignInWaitInput,
+  ConnectorInput,
+  ConnectorList,
+  ConnectorRemoveResult,
+  ConnectorSaveInput,
+} from "./connectors.ts";
+import {
   CompanyBrainCollection,
   CompanyBrainCollectionInput,
   CompanyBrainCollectionList,
@@ -568,6 +579,12 @@ export const WS_METHODS = {
   companyChannelsSaveDraft: "companyChannels.saveDraft",
   companyChannelsDiscardDraft: "companyChannels.discardDraft",
   companyChannelsSend: "companyChannels.send",
+  connectorsList: "connectors.list",
+  connectorsSave: "connectors.save",
+  connectorsRemove: "connectors.remove",
+  connectorsRefresh: "connectors.refresh",
+  connectorsGoogleSignInStart: "connectors.googleSignInStart",
+  connectorsGoogleSignInWait: "connectors.googleSignInWait",
   companyBrainListCollections: "companyBrain.listCollections",
   companyBrainListRecords: "companyBrain.listRecords",
   companyBrainReadRecord: "companyBrain.readRecord",
@@ -974,6 +991,47 @@ const WsCompanyChannelsSendRpc = Rpc.make(WS_METHODS.companyChannelsSend, {
   payload: CompanyDraftInput,
   success: CompanyDraft,
   error: companyChannelErrors,
+});
+
+const connectorErrors = Schema.Union([ConnectorError, EnvironmentAuthorizationError]);
+
+const WsConnectorsListRpc = Rpc.make(WS_METHODS.connectorsList, {
+  payload: Schema.Struct({}),
+  success: ConnectorList,
+  error: connectorErrors,
+});
+
+// Connects and lists the server's tools before saving, so a saved connector works.
+const WsConnectorsSaveRpc = Rpc.make(WS_METHODS.connectorsSave, {
+  payload: ConnectorSaveInput,
+  success: Connector,
+  error: connectorErrors,
+});
+
+const WsConnectorsRemoveRpc = Rpc.make(WS_METHODS.connectorsRemove, {
+  payload: ConnectorInput,
+  success: ConnectorRemoveResult,
+  error: connectorErrors,
+});
+
+// Reconnects and relists tools; a server that fails comes back with an error health, not a failure.
+const WsConnectorsRefreshRpc = Rpc.make(WS_METHODS.connectorsRefresh, {
+  payload: ConnectorInput,
+  success: Connector,
+  error: connectorErrors,
+});
+
+const WsConnectorsGoogleSignInStartRpc = Rpc.make(WS_METHODS.connectorsGoogleSignInStart, {
+  payload: ConnectorGoogleSignInStartInput,
+  success: ConnectorGoogleSignIn,
+  error: connectorErrors,
+});
+
+// Resolves with the saved connector once the browser finishes on Google, however long that takes.
+const WsConnectorsGoogleSignInWaitRpc = Rpc.make(WS_METHODS.connectorsGoogleSignInWait, {
+  payload: ConnectorGoogleSignInWaitInput,
+  success: Connector,
+  error: connectorErrors,
 });
 
 const companyBrainErrors = Schema.Union([CompanyBrainError, EnvironmentAuthorizationError]);
@@ -2273,6 +2331,12 @@ export const WsRpcGroup = RpcGroup.make(
   WsCompanyChannelsSaveDraftRpc,
   WsCompanyChannelsDiscardDraftRpc,
   WsCompanyChannelsSendRpc,
+  WsConnectorsListRpc,
+  WsConnectorsSaveRpc,
+  WsConnectorsRemoveRpc,
+  WsConnectorsRefreshRpc,
+  WsConnectorsGoogleSignInStartRpc,
+  WsConnectorsGoogleSignInWaitRpc,
   WsCompanyBrainListCollectionsRpc,
   WsCompanyBrainListRecordsRpc,
   WsCompanyBrainReadRecordRpc,

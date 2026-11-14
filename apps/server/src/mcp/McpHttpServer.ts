@@ -53,6 +53,8 @@ import { CompanyBrainToolkit } from "./toolkits/companyBrain/tools.ts";
 import * as CompanyBrainHandlers from "./toolkits/companyBrain/handlers.ts";
 import { CompanyChannelsToolkit } from "./toolkits/companyChannels/tools.ts";
 import * as CompanyChannelsHandlers from "./toolkits/companyChannels/handlers.ts";
+import { ConnectorsToolkit } from "./toolkits/connectors/tools.ts";
+import * as ConnectorsHandlers from "./toolkits/connectors/handlers.ts";
 import * as EnvironmentHandlers from "./toolkits/environment/handlers.ts";
 import { ProjectToolkit } from "./toolkits/project/tools.ts";
 import * as ProjectHandlers from "./toolkits/project/handlers.ts";
@@ -1130,6 +1132,8 @@ const layerCompanyChannelsToolkit = toolkitRegistration(
   CompanyChannelsHandlers.layer,
 );
 
+const layerConnectorsToolkit = toolkitRegistration(ConnectorsToolkit, ConnectorsHandlers.layer);
+
 const layerCompanyBrainToolkit = toolkitRegistration(
   CompanyBrainToolkit,
   CompanyBrainHandlers.layer,
@@ -1185,6 +1189,7 @@ export const layerTools = Layer.mergeAll(
   layerHtmlToolkit,
   layerAgentBridgeToolkit,
   layerCompanyChannelsToolkit,
+  layerConnectorsToolkit,
   layerCompanyBrainToolkit,
 );
 

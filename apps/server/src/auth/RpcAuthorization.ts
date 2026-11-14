@@ -91,6 +91,8 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.companyChannelsListInbox]: AuthFilesystemReadScope,
   [WS_METHODS.companyChannelsReadMessage]: AuthFilesystemReadScope,
   [WS_METHODS.companyChannelsListOutbox]: AuthFilesystemReadScope,
+  // Names which accounts this machine is signed in to, like the accounts list above.
+  [WS_METHODS.connectorsList]: AuthFilesystemReadScope,
   // Records are files in the project folder.
   [WS_METHODS.companyBrainListCollections]: AuthFilesystemReadScope,
   [WS_METHODS.companyBrainListRecords]: AuthFilesystemReadScope,
