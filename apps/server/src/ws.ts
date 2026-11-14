@@ -7,6 +7,7 @@ import * as PeerLinks from "./peer/PeerLinks.ts";
 import * as CompanyBrain from "./companyBrain/CompanyBrain.ts";
 import * as CompanyBrainSource from "./companyBrain/CompanyBrainSource.ts";
 import * as CompanyChannels from "./companyChannels/CompanyChannels.ts";
+import * as Connectors from "./connectors/Connectors.ts";
 
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -1363,6 +1364,7 @@ export const layerWsRpc = (
       const peerLinks = yield* PeerLinks.PeerLinks;
       const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
       const companyChannels = yield* CompanyChannels.CompanyChannels;
+      const connectors = yield* Connectors.Connectors;
       const companyBrain = yield* CompanyBrain.CompanyBrain;
       const companyBrainSource = yield* CompanyBrainSource.CompanyBrainSource;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
@@ -2576,6 +2578,15 @@ export const layerWsRpc = (
         [WS_METHODS.companyChannelsDiscardDraft]: (input) =>
           companyChannels.discardDraft(input).pipe(Effect.map((discarded) => ({ discarded }))),
         [WS_METHODS.companyChannelsSend]: (input) => companyChannels.send(input),
+        [WS_METHODS.connectorsList]: () =>
+          connectors.list.pipe(Effect.map((list) => ({ connectors: list }))),
+        [WS_METHODS.connectorsSave]: (input) => connectors.save(input),
+        [WS_METHODS.connectorsRemove]: ({ connectorId }) =>
+          connectors.remove(connectorId).pipe(Effect.map((removed) => ({ removed }))),
+        [WS_METHODS.connectorsRefresh]: ({ connectorId }) => connectors.refresh(connectorId),
+        [WS_METHODS.connectorsGoogleSignInStart]: ({ httpBaseUrl }) =>
+          connectors.googleSignInStart(httpBaseUrl),
+        [WS_METHODS.connectorsGoogleSignInWait]: ({ state }) => connectors.googleSignInWait(state),
         [WS_METHODS.companyBrainListCollections]: ({ projectId }) =>
           companyBrain.listCollections(projectId),
         [WS_METHODS.companyBrainListRecords]: (input) => companyBrain.listRecords(input),
@@ -3364,6 +3375,7 @@ export const layer = Layer.unwrap(
     const peerLinks = yield* PeerLinks.PeerLinks;
     const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
     const companyChannels = yield* CompanyChannels.CompanyChannels;
+    const connectors = yield* Connectors.Connectors;
     const companyBrain = yield* CompanyBrain.CompanyBrain;
     const companyBrainSource = yield* CompanyBrainSource.CompanyBrainSource;
     const sql = yield* SqlClient.SqlClient;
@@ -3450,6 +3462,7 @@ export const layer = Layer.unwrap(
               Layer.provide(Layer.succeed(PeerLinks.PeerLinks, peerLinks)),
               Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),
               Layer.provide(Layer.succeed(CompanyChannels.CompanyChannels, companyChannels)),
+              Layer.provide(Layer.succeed(Connectors.Connectors, connectors)),
               Layer.provide(Layer.succeed(CompanyBrain.CompanyBrain, companyBrain)),
               Layer.provide(
                 Layer.succeed(CompanyBrainSource.CompanyBrainSource, companyBrainSource),
