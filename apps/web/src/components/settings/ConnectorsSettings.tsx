@@ -1,4 +1,4 @@
-import type { Connector, ConnectorAuthInput, EnvironmentId } from "@t3tools/contracts";
+import type { Connector, ConnectorAuthInput, ConnectorId, EnvironmentId } from "@t3tools/contracts";
 import { useAtomValue } from "@effect/atom-react";
 import * as Cause from "effect/Cause";
 import * as Redacted from "effect/Redacted";
@@ -63,7 +63,13 @@ function EnvironmentConnectors({ environmentId }: { readonly environmentId: Envi
   }>({ open: false, connector: null, session: 0 });
   const openDialog = (connector: Connector | null) =>
     setDialog((current) => ({ open: true, connector, session: current.session + 1 }));
-  const google = useGoogleSignIn(environmentId);
+  const signIn = useBrowserSignIn(environmentId);
+  const connectGoogle = () =>
+    void signIn.start("google").then((failure) => {
+      if (failure !== null) {
+        toastManager.add({ type: "error", title: "Google not connected", description: failure });
+      }
+    });
 
   return (
     <>
@@ -75,10 +81,10 @@ function EnvironmentConnectors({ environmentId }: { readonly environmentId: Envi
               <Button
                 size="xs"
                 variant="outline"
-                disabled={google.status !== "idle"}
-                onClick={() => void google.start()}
+                disabled={signIn.status !== "idle"}
+                onClick={connectGoogle}
               >
-                {google.status === "idle" ? null : <Spinner />}
+                {signIn.status === "idle" ? null : <Spinner />}
                 Connect Google
               </Button>
               <Button size="xs" variant="outline" onClick={() => openDialog(null)}>
@@ -89,24 +95,24 @@ function EnvironmentConnectors({ environmentId }: { readonly environmentId: Envi
           ) : null
         }
       >
-        {google.status === "waiting" ? (
+        {signIn.status === "waiting" ? (
           <SettingsRow
-            title="Finish signing in to Google in the tab that opened."
+            title={`Finish signing in to ${signIn.service} in the tab that opened.`}
             description={
               <span>
                 Tab didn't open?{" "}
                 <a
-                  href={google.authUrl}
+                  href={signIn.authUrl}
                   target="_blank"
                   rel="noreferrer noopener"
                   className="underline underline-offset-2"
                 >
-                  Open Google sign-in
+                  Open {signIn.service} sign-in
                 </a>
               </span>
             }
             control={
-              <Button size="xs" variant="ghost" onClick={google.cancel}>
+              <Button size="xs" variant="ghost" onClick={signIn.cancel}>
                 Cancel
               </Button>
             }
@@ -129,7 +135,7 @@ function EnvironmentConnectors({ environmentId }: { readonly environmentId: Envi
               connector={connector}
               canManage={canManage}
               onEdit={() =>
-                connector.source._tag === "google" ? void google.start() : openDialog(connector)
+                connector.source._tag === "google" ? connectGoogle() : openDialog(connector)
               }
             />
           ))
@@ -142,6 +148,7 @@ function EnvironmentConnectors({ environmentId }: { readonly environmentId: Envi
           onOpenChange={(open) => setDialog((current) => ({ ...current, open }))}
           connector={dialog.connector}
           environmentId={environmentId}
+          onSignIn={signIn.start}
         />
       ) : null}
     </>
@@ -226,7 +233,11 @@ function ConnectorRow(props: {
   );
 }
 
-const AUTH_LABELS = { none: "No sign-in", header: "API key or token" } as const;
+const AUTH_LABELS = {
+  oauth: "Sign in with browser",
+  header: "API key or token",
+  none: "No sign-in",
+} as const;
 type AuthKind = keyof typeof AUTH_LABELS;
 
 function ConnectorDialog(props: {
@@ -234,12 +245,13 @@ function ConnectorDialog(props: {
   readonly onOpenChange: (open: boolean) => void;
   readonly connector: Connector | null;
   readonly environmentId: EnvironmentId;
+  readonly onSignIn: (target: OAuthSignInTarget) => Promise<string | null>;
 }) {
   const editing = props.connector;
   const source = editing?.source._tag === "mcp" ? editing.source : undefined;
   const [name, setName] = useState(editing?.name ?? "");
   const [url, setUrl] = useState(source?.url ?? "");
-  const [authKind, setAuthKind] = useState<AuthKind>(source?.auth._tag ?? "none");
+  const [authKind, setAuthKind] = useState<AuthKind>(source?.auth._tag ?? "oauth");
   const [headerName, setHeaderName] = useState(
     source?.auth._tag === "header" ? source.auth.name : "Authorization",
   );
@@ -258,6 +270,19 @@ function ConnectorDialog(props: {
 
   const submit = async () => {
     if (missing) return;
+    setError(null);
+    if (authKind === "oauth") {
+      setSaving(true);
+      const failure = await props.onSignIn({
+        ...(editing ? { connectorId: editing.id } : {}),
+        name: name.trim(),
+        url: url.trim(),
+      });
+      setSaving(false);
+      if (failure === null) props.onOpenChange(false);
+      else setError(failure);
+      return;
+    }
     const auth: ConnectorAuthInput =
       authKind === "none"
         ? { _tag: "none" }
@@ -267,7 +292,6 @@ function ConnectorDialog(props: {
             ...(headerValue.trim().length > 0 ? { value: Redacted.make(headerValue.trim()) } : {}),
           };
     setSaving(true);
-    setError(null);
     const result = await save({
       environmentId: props.environmentId,
       input: {
@@ -285,8 +309,7 @@ function ConnectorDialog(props: {
       });
       props.onOpenChange(false);
     } else {
-      const failure = Cause.squash(result.cause);
-      setError(failure instanceof Error ? failure.message : String(failure));
+      setError(failureMessage(result.cause));
     }
   };
 
@@ -346,10 +369,11 @@ function ConnectorDialog(props: {
                   ))}
                 </SelectPopup>
               </Select>
-              <p className="text-xs text-muted-foreground">
-                Servers that sign in through a browser are not supported yet. Use one that accepts
-                an API key or token.
-              </p>
+              {authKind === "oauth" ? (
+                <p className="text-xs text-muted-foreground">
+                  T4 opens the service's sign-in page and saves the connector when you finish there.
+                </p>
+              ) : null}
             </div>
             {authKind === "header" ? (
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
@@ -388,7 +412,15 @@ function ConnectorDialog(props: {
           </Button>
           <Button disabled={saving || missing} onClick={() => void submit()}>
             {saving ? <Spinner /> : null}
-            {saving ? "Connecting" : editing ? "Save" : "Connect"}
+            {authKind === "oauth"
+              ? saving
+                ? "Opening sign-in"
+                : "Sign in"
+              : saving
+                ? "Connecting"
+                : editing
+                  ? "Save"
+                  : "Connect"}
           </Button>
         </DialogFooter>
       </DialogPopup>
@@ -396,55 +428,74 @@ function ConnectorDialog(props: {
   );
 }
 
-type GoogleSignInState =
+/** An MCP server to sign in to on its own page. */
+interface OAuthSignInTarget {
+  readonly connectorId?: ConnectorId;
+  readonly name: string;
+  readonly url: string;
+}
+
+type SignInState =
   | { readonly status: "idle" }
   | { readonly status: "starting" }
-  | { readonly status: "waiting"; readonly authUrl: string };
+  | { readonly status: "waiting"; readonly service: string; readonly authUrl: string };
 
-/** Opens Google's consent screen and waits for the server to finish the sign-in. */
-function useGoogleSignIn(environmentId: EnvironmentId) {
+const failureMessage = (cause: Cause.Cause<unknown>) => {
+  const error = Cause.squash(cause);
+  return error instanceof Error ? error.message : String(error);
+};
+
+/** Opens a service's consent screen and waits for the server to finish the sign-in. */
+function useBrowserSignIn(environmentId: EnvironmentId) {
   const httpBaseUrl = useEnvironmentHttpBaseUrl(environmentId);
-  const startSignIn = useAtomCommand(connectorEnvironment.startGoogleSignIn, {
+  const startGoogle = useAtomCommand(connectorEnvironment.startGoogleSignIn, {
     reportFailure: false,
   });
-  const waitForSignIn = useAtomCommand(connectorEnvironment.waitForGoogleSignIn, {
+  const startOAuth = useAtomCommand(connectorEnvironment.startOAuthSignIn, {
     reportFailure: false,
   });
-  const [state, setState] = useState<GoogleSignInState>({ status: "idle" });
+  const waitForSignIn = useAtomCommand(connectorEnvironment.waitForSignIn, {
+    reportFailure: false,
+  });
+  const [state, setState] = useState<SignInState>({ status: "idle" });
   // Bumped by cancel, so a sign-in that settles afterwards leaves the page alone.
   const attempt = useRef(0);
-  const failure = (cause: Cause.Cause<unknown>) => {
-    const error = Cause.squash(cause);
-    toastManager.add({
-      type: "error",
-      title: "Google not connected",
-      description: error instanceof Error ? error.message : String(error),
-    });
-  };
 
-  const start = async () => {
-    if (httpBaseUrl === null) return;
+  /** Resolves with why the sign-in could not start, or null once the service's page is open. */
+  const start = async (target: "google" | OAuthSignInTarget): Promise<string | null> => {
+    if (httpBaseUrl === null) return "T4 is not connected to this machine.";
+    const service = target === "google" ? "Google" : target.name;
     const mine = ++attempt.current;
     setState({ status: "starting" });
-    const started = await startSignIn({ environmentId, input: { httpBaseUrl } });
-    if (attempt.current !== mine) return;
+    const started =
+      target === "google"
+        ? await startGoogle({ environmentId, input: { httpBaseUrl } })
+        : await startOAuth({ environmentId, input: { ...target, httpBaseUrl } });
+    if (attempt.current !== mine) return null;
     if (started._tag !== "Success") {
       setState({ status: "idle" });
-      failure(started.cause);
-      return;
+      return failureMessage(started.cause);
     }
-    setState({ status: "waiting", authUrl: started.value.authUrl });
+    setState({ status: "waiting", service, authUrl: started.value.authUrl });
     void ensureLocalApi()
       .shell.openExternal(started.value.authUrl)
       .catch(() => undefined);
-    const finished = await waitForSignIn({ environmentId, input: { state: started.value.state } });
-    if (attempt.current !== mine) return;
-    setState({ status: "idle" });
-    if (finished._tag === "Success") {
-      toastManager.add({ type: "success", title: `${finished.value.name} connected` });
-    } else {
-      failure(finished.cause);
-    }
+    void waitForSignIn({ environmentId, input: { state: started.value.state } }).then(
+      (finished) => {
+        if (attempt.current !== mine) return;
+        setState({ status: "idle" });
+        if (finished._tag === "Success") {
+          toastManager.add({ type: "success", title: `${finished.value.name} connected` });
+        } else {
+          toastManager.add({
+            type: "error",
+            title: `${service} not connected`,
+            description: failureMessage(finished.cause),
+          });
+        }
+      },
+    );
+    return null;
   };
 
   const cancel = () => {
@@ -454,6 +505,7 @@ function useGoogleSignIn(environmentId: EnvironmentId) {
 
   return {
     status: state.status,
+    service: state.status === "waiting" ? state.service : "",
     authUrl: state.status === "waiting" ? state.authUrl : "",
     start,
     cancel,

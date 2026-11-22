@@ -5,9 +5,19 @@ Codex, and Antigravity. Add one in **Settings → Connectors**
 with the service's MCP server URL. Services publish these in their docs, for
 example `https://mcp.linear.app/mcp`.
 
-- **Sign-in:** choose **API key or token** for servers that take a key in a
-  header. Most use `Authorization` with the value `Bearer <your key>`. MCP
-  servers that sign in through a browser window aren't supported yet.
+- **Sign-in:** choose **Sign in with browser** for services that sign you in on
+  their own page, such as Linear and Notion. T4 opens that page and saves the
+  connector when you finish there. Choose **API key or token** for servers that
+  take a key in a header. Most use `Authorization` with the value
+  `Bearer <your key>`.
+- **Browser sign-in returns to your T4.** The service sends your browser back to
+  the address you use to reach this machine, and some services accept only
+  `https` addresses or `localhost`. If the service refuses the sign-in, connect
+  from the desktop app on that machine or over T3 Connect, or use an API key. A
+  service that only signs in apps it has approved in advance needs an API key
+  too.
+- **Signed out?** A connector that says the service signed T4 out needs you to
+  choose **Edit**, then **Sign in** again.
 - **Saving checks it works.** T4 connects and lists the server's tools before it
   saves, so a wrong URL or key shows up right away. The key stays on the machine
   running T4 and is never shown again.

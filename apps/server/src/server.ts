@@ -79,7 +79,7 @@ import * as CompanyBrain from "./companyBrain/CompanyBrain.ts";
 import * as CompanyBrainSource from "./companyBrain/CompanyBrainSource.ts";
 import * as CompanyChannels from "./companyChannels/CompanyChannels.ts";
 import * as Connectors from "./connectors/Connectors.ts";
-import * as GoogleCallbackRoute from "./connectors/googleCallbackRoute.ts";
+import * as SignInCallbackRoute from "./connectors/signInCallbackRoute.ts";
 import * as MailTransport from "./companyChannels/MailTransport.ts";
 import * as PeerMcpClient from "./peer/PeerMcpClient.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
@@ -742,7 +742,7 @@ const layerMakeRoutes = Layer.mergeAll(
     ),
     ServerHttp.layerOtlpTracesProxyRoute,
     ServerHttp.layerAssetRoute,
-    GoogleCallbackRoute.layer,
+    SignInCallbackRoute.layer,
     ServerHttp.layerAttachmentUploadRoute,
     GuestHttp.layer,
     DeviceHubProxy.layer,

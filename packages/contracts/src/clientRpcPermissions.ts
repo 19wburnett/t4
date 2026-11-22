@@ -98,7 +98,8 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.connectorsRemove]: AuthSettingsWriteScope,
   [WS_METHODS.connectorsRefresh]: AuthSettingsWriteScope,
   [WS_METHODS.connectorsGoogleSignInStart]: AuthSettingsWriteScope,
-  [WS_METHODS.connectorsGoogleSignInWait]: AuthSettingsWriteScope,
+  [WS_METHODS.connectorsOAuthSignInStart]: AuthSettingsWriteScope,
+  [WS_METHODS.connectorsSignInWait]: AuthSettingsWriteScope,
 } as const;
 export type ClientGuardedRpcTag = keyof typeof CLIENT_GUARDED_RPC_SCOPES;
 

@@ -1,5 +1,6 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { describe, expect, it } from "@effect/vitest";
+import { auth, UnauthorizedError } from "@modelcontextprotocol/sdk/client/auth.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
@@ -27,8 +28,84 @@ interface FakeTool {
   readonly annotations?: { readonly readOnlyHint: boolean };
 }
 
-/** An in-memory MCP server that wants `TOKEN` and records what it is asked. */
-const upstream = () => {
+const MCP_URL = "https://mcp.example.test/mcp";
+const MCP_ORIGIN = new URL(MCP_URL).origin;
+
+/** The sign-in service of an MCP server that takes any client, faked at the fetch boundary. */
+const fakeOAuthServer = () => {
+  const challenges = new Map<string, string>();
+  const registrations: Array<{ readonly redirect_uris: ReadonlyArray<string> }> = [];
+  let issued = 0;
+  let accessToken: string | null = null;
+  let refreshToken: string | null = null;
+  const json = (body: unknown, status = 200) =>
+    new Response(JSON.stringify(body), {
+      status,
+      headers: { "content-type": "application/json" },
+    });
+  const issue = () => {
+    issued += 1;
+    accessToken = `oauth-access-${issued}`;
+    refreshToken = `oauth-refresh-${issued}`;
+    return json({
+      access_token: accessToken,
+      token_type: "Bearer",
+      expires_in: 3600,
+      refresh_token: refreshToken,
+    });
+  };
+  const fetch: typeof globalThis.fetch = async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.origin !== MCP_ORIGIN) return json({}, 404);
+    if (url.pathname === "/.well-known/oauth-authorization-server") {
+      return json({
+        issuer: MCP_ORIGIN,
+        authorization_endpoint: `${MCP_ORIGIN}/authorize`,
+        token_endpoint: `${MCP_ORIGIN}/token`,
+        registration_endpoint: `${MCP_ORIGIN}/register`,
+        response_types_supported: ["code"],
+        code_challenge_methods_supported: ["S256"],
+      });
+    }
+    if (url.pathname === "/register") {
+      const body = JSON.parse(String(init?.body)) as { redirect_uris: ReadonlyArray<string> };
+      registrations.push(body);
+      return json({ ...body, client_id: "t4-client" }, 201);
+    }
+    if (url.pathname === "/token") {
+      const body = new URLSearchParams(String(init?.body));
+      if (body.get("grant_type") === "refresh_token") {
+        return refreshToken !== null && body.get("refresh_token") === refreshToken
+          ? issue()
+          : json({ error: "invalid_grant" }, 400);
+      }
+      const challenge = challenges.get(body.get("code") ?? "");
+      return challenge === (await pkceChallenge(body.get("code_verifier") ?? ""))
+        ? issue()
+        : json({ error: "invalid_grant" }, 400);
+    }
+    return json({}, 404);
+  };
+  return {
+    fetch,
+    registrations,
+    validAccessToken: () => accessToken,
+    /** The service sends the browser back with a code tied to the sign-in's PKCE challenge. */
+    approve: (authUrl: string, code: string) => {
+      challenges.set(code, new URL(authUrl).searchParams.get("code_challenge") ?? "");
+    },
+    expireAccessToken: () => {
+      accessToken = null;
+    },
+    revoke: () => {
+      accessToken = null;
+      refreshToken = null;
+    },
+  };
+};
+
+/** An in-memory MCP server that wants `TOKEN`, or a signed-in client, and records what it is asked. */
+const upstream = (oauth: ReturnType<typeof fakeOAuthServer>) => {
   const opened: Array<ConnectorTarget> = [];
   const calls: Array<{ readonly name: string; readonly args: unknown }> = [];
   let tools: ReadonlyArray<FakeTool> = [
@@ -48,7 +125,14 @@ const upstream = () => {
   const open = async (target: ConnectorTarget) => {
     opened.push(target);
     if (!reachable) throw new TypeError("fetch failed");
-    if (target.headers["Authorization"] !== TOKEN) {
+    const provider = target.authProvider;
+    if (provider !== undefined) {
+      // What the SDK's HTTP transport does when the server answers 401.
+      if ((await provider.tokens())?.access_token !== oauth.validAccessToken()) {
+        const result = await auth(provider, { serverUrl: target.url, fetchFn: oauth.fetch });
+        if (result !== "AUTHORIZED") throw new UnauthorizedError();
+      }
+    } else if (target.headers["Authorization"] !== TOKEN) {
       throw Object.assign(new Error("Unauthorized"), { code: 401 });
     }
     const server = new Server({ name: "fake", version: "1.0.0" }, { capabilities: { tools: {} } });
@@ -133,13 +217,19 @@ const withConnectors = <A, E>(
     readonly secrets: ServerSecretStore.ServerSecretStore["Service"];
     readonly fake: ReturnType<typeof upstream>;
     readonly google: ReturnType<typeof fakeGoogle>;
+    readonly oauth: ReturnType<typeof fakeOAuthServer>;
     readonly stateDir: string;
   }) => Effect.Effect<A, E, FileSystem.FileSystem | Path.Path>,
 ) =>
   Effect.gen(function* () {
-    const fake = upstream();
+    const oauth = fakeOAuthServer();
+    const fake = upstream(oauth);
     const google = fakeGoogle();
-    const layer = Connectors.layerWith({ open: fake.open, google: google.broker }).pipe(
+    const layer = Connectors.layerWith({
+      open: fake.open,
+      google: google.broker,
+      oauthFetch: oauth.fetch,
+    }).pipe(
       Layer.provideMerge(ServerSecretStore.layer),
       Layer.provideMerge(
         ServerConfig.ServerConfig.layerTest(process.cwd(), { prefix: "t3-connectors-state-" }),
@@ -150,13 +240,13 @@ const withConnectors = <A, E>(
       const connectors = yield* Connectors.Connectors;
       const secrets = yield* ServerSecretStore.ServerSecretStore;
       const { stateDir } = yield* ServerConfig.ServerConfig;
-      return yield* use({ connectors, secrets, fake, google, stateDir });
+      return yield* use({ connectors, secrets, fake, google, oauth, stateDir });
     }).pipe(Effect.provide(layer));
   }).pipe(Effect.scoped, Effect.provide(NodeServices.layer));
 
 const linear: ConnectorSaveInput = {
   name: "Linear",
-  url: "https://mcp.example.test/mcp",
+  url: MCP_URL,
   auth: { _tag: "header", name: "Authorization", value: Redacted.make(TOKEN) },
 };
 
@@ -273,8 +363,8 @@ describe("Connectors", () => {
         expect(state.r).toBe("https://t4.example.test:8443/api/connectors/google/callback");
 
         google.approve(started.authUrl, "code-1");
-        const waiting = yield* connectors.googleSignInWait(started.state).pipe(Effect.forkChild);
-        const finished = yield* connectors.googleSignInFinish({
+        const waiting = yield* connectors.signInWait(started.state).pipe(Effect.forkChild);
+        const finished = yield* connectors.signInFinish({
           state: started.state,
           code: "code-1",
           error: undefined,
@@ -291,9 +381,98 @@ describe("Connectors", () => {
         expect(file).not.toContain("refresh-1");
 
         const replay = yield* connectors
-          .googleSignInFinish({ state: started.state, code: "code-1", error: undefined })
+          .signInFinish({ state: started.state, code: "code-1", error: undefined })
           .pipe(Effect.flip);
         expect(replay.reason).toBe("sign_in_expired");
+      }),
+    ),
+  );
+
+  it.effect("connects a server through its own sign-in page and keeps the tokens secret", () =>
+    withConnectors(({ connectors, fake, oauth, secrets, stateDir }) =>
+      Effect.gen(function* () {
+        const started = yield* connectors.oauthSignInStart({
+          name: "Linear",
+          url: MCP_URL,
+          httpBaseUrl: "https://t4.example.test:8443/",
+        });
+        const callback = "https://t4.example.test:8443/api/connectors/oauth/callback";
+        expect(oauth.registrations.map((client) => client.redirect_uris)).toEqual([[callback]]);
+        const authUrl = new URL(started.authUrl);
+        expect(authUrl.origin + authUrl.pathname).toBe(`${MCP_ORIGIN}/authorize`);
+        expect(authUrl.searchParams.get("client_id")).toBe("t4-client");
+        expect(authUrl.searchParams.get("redirect_uri")).toBe(callback);
+        expect(authUrl.searchParams.get("state")).toBe(started.state);
+        expect(yield* connectors.list).toEqual([]);
+
+        oauth.approve(started.authUrl, "code-1");
+        const waiting = yield* connectors.signInWait(started.state).pipe(Effect.forkChild);
+        const finished = yield* connectors.signInFinish({
+          state: started.state,
+          code: "code-1",
+          error: undefined,
+        });
+        expect(finished.source).toEqual({ _tag: "mcp", url: MCP_URL, auth: { _tag: "oauth" } });
+        expect(finished.tools.map((tool) => tool.name)).toEqual(["create_issue", "list_issues"]);
+        expect(yield* Fiber.join(waiting)).toEqual(finished);
+        expect(fake.opened.at(-1)?.headers).toEqual({});
+
+        const file = yield* (yield* FileSystem.FileSystem).readFileString(
+          `${stateDir}/connectors.json`,
+        );
+        expect(file).not.toContain("oauth-access-1");
+        expect(file).not.toContain("oauth-refresh-1");
+        const secret = yield* secrets.get(`connector-${finished.id}`);
+        expect(secret._tag === "Some" && new TextDecoder().decode(secret.value)).toContain(
+          "oauth-refresh-1",
+        );
+      }),
+    ),
+  );
+
+  it.effect("keeps the tokens a service rotates, and reports a revoked sign-in", () =>
+    withConnectors(({ connectors, oauth, secrets }) =>
+      Effect.gen(function* () {
+        const started = yield* connectors.oauthSignInStart({
+          name: "Linear",
+          url: MCP_URL,
+          httpBaseUrl: "https://t4.example.test",
+        });
+        oauth.approve(started.authUrl, "code-1");
+        const connector = yield* connectors.signInFinish({
+          state: started.state,
+          code: "code-1",
+          error: undefined,
+        });
+
+        oauth.expireAccessToken();
+        expect((yield* connectors.refresh(connector.id)).health).toEqual({ _tag: "ok" });
+        const secret = yield* secrets.get(`connector-${connector.id}`);
+        const saved = secret._tag === "Some" ? new TextDecoder().decode(secret.value) : "";
+        expect(saved).toContain("oauth-refresh-2");
+        expect(saved).not.toContain("oauth-refresh-1");
+
+        oauth.revoke();
+        expect((yield* connectors.refresh(connector.id)).health).toEqual({
+          _tag: "error",
+          message: "Linear signed T4 out. Sign in again in Settings → Connectors.",
+        });
+      }),
+    ),
+  );
+
+  it.effect("refuses a browser sign-in for a server that offers none", () =>
+    withConnectors(({ connectors }) =>
+      Effect.gen(function* () {
+        const error = yield* connectors
+          .oauthSignInStart({
+            name: "Plain",
+            url: "https://plain.example.test/mcp",
+            httpBaseUrl: "https://t4.example.test",
+          })
+          .pipe(Effect.flip);
+        expect(error.reason).toBe("sign_in_failed");
+        expect(error.message).toContain("If it gives you an API key, use that.");
       }),
     ),
   );
@@ -302,15 +481,15 @@ describe("Connectors", () => {
     withConnectors(({ connectors }) =>
       Effect.gen(function* () {
         const cancelled = yield* connectors.googleSignInStart("https://t4.example.test");
-        const waiting = yield* connectors.googleSignInWait(cancelled.state).pipe(Effect.forkChild);
+        const waiting = yield* connectors.signInWait(cancelled.state).pipe(Effect.forkChild);
         yield* connectors
-          .googleSignInFinish({ state: cancelled.state, code: undefined, error: "access_denied" })
+          .signInFinish({ state: cancelled.state, code: undefined, error: "access_denied" })
           .pipe(Effect.flip);
         const failure = yield* Fiber.join(waiting).pipe(Effect.flip);
         expect(failure.message).toBe("Google sign-in was cancelled.");
 
         const abandoned = yield* connectors.googleSignInStart("https://t4.example.test");
-        const expiring = yield* connectors.googleSignInWait(abandoned.state).pipe(Effect.forkChild);
+        const expiring = yield* connectors.signInWait(abandoned.state).pipe(Effect.forkChild);
         yield* TestClock.adjust("15 minutes");
         expect((yield* Fiber.join(expiring).pipe(Effect.flip)).reason).toBe("sign_in_expired");
         expect(yield* connectors.list).toEqual([]);
@@ -323,7 +502,7 @@ describe("Connectors", () => {
       Effect.gen(function* () {
         const started = yield* connectors.googleSignInStart("https://t4.example.test");
         google.approve(started.authUrl, "code-1");
-        const connector = yield* connectors.googleSignInFinish({
+        const connector = yield* connectors.signInFinish({
           state: started.state,
           code: "code-1",
           error: undefined,

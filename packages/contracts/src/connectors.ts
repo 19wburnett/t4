@@ -18,6 +18,8 @@ export const ConnectorUrl = TrimmedNonEmptyString.check(Schema.isPattern(/^https
 export const ConnectorAuth = Schema.Union([
   Schema.TaggedStruct("none", {}),
   Schema.TaggedStruct("header", { name: TrimmedNonEmptyString }),
+  /** Signed in through the service's own page; T4 holds and refreshes the tokens. */
+  Schema.TaggedStruct("oauth", {}),
 ]);
 export type ConnectorAuth = typeof ConnectorAuth.Type;
 
@@ -90,16 +92,26 @@ export const ConnectorGoogleSignInStartInput = Schema.Struct({
 });
 export type ConnectorGoogleSignInStartInput = typeof ConnectorGoogleSignInStartInput.Type;
 
-export const ConnectorGoogleSignIn = Schema.Struct({
-  /** Opens Google's consent screen. */
+/** Signs in on the service's own page, then saves the connector. Replaces `connectorId`'s sign-in when given. */
+export const ConnectorOAuthSignInStartInput = Schema.Struct({
+  connectorId: Schema.optionalKey(ConnectorId),
+  name: TrimmedNonEmptyString,
+  url: ConnectorUrl,
+  /** This environment's HTTP base URL as the browser reaches it; the service sends the browser back here. */
+  httpBaseUrl: ConnectorUrl,
+});
+export type ConnectorOAuthSignInStartInput = typeof ConnectorOAuthSignInStartInput.Type;
+
+export const ConnectorSignIn = Schema.Struct({
+  /** Opens the service's consent screen. */
   authUrl: Schema.String,
   /** Identifies this sign-in to wait on it. */
   state: Schema.String,
 });
-export type ConnectorGoogleSignIn = typeof ConnectorGoogleSignIn.Type;
+export type ConnectorSignIn = typeof ConnectorSignIn.Type;
 
-export const ConnectorGoogleSignInWaitInput = Schema.Struct({ state: Schema.String });
-export type ConnectorGoogleSignInWaitInput = typeof ConnectorGoogleSignInWaitInput.Type;
+export const ConnectorSignInWaitInput = Schema.Struct({ state: Schema.String });
+export type ConnectorSignInWaitInput = typeof ConnectorSignInWaitInput.Type;
 
 const CONNECTOR_FAILURES = [
   "unknown_connector",

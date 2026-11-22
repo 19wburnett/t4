@@ -3,9 +3,10 @@ import {
   type ConnectorAuth,
   ConnectorError,
   type ConnectorFailure,
-  type ConnectorGoogleSignIn,
   ConnectorId,
+  type ConnectorOAuthSignInStartInput,
   type ConnectorSaveInput,
+  type ConnectorSignIn,
   ConnectorSource,
   ConnectorTool,
 } from "@t3tools/contracts";
@@ -37,6 +38,17 @@ import {
   type UpstreamTool,
 } from "./connectorClient.ts";
 import {
+  beginOAuthSignIn,
+  completeOAuthSignIn,
+  decodeOAuthCredentials,
+  defaultOAuthFetch,
+  encodeOAuthCredentials,
+  oauthCallbackUrl,
+  type OAuthCredentials,
+  type OAuthFetch,
+  oauthSession,
+} from "./connectorOAuth.ts";
+import {
   authorizationUrl,
   callbackUrl,
   defaultGoogleBroker,
@@ -49,8 +61,8 @@ import {
 import { GOOGLE_TOOLS, googleAccountEmail, makeGoogleClient } from "./google/googleTools.ts";
 
 const CONNECTORS_FILE = "connectors.json";
-// Long enough to read Google's consent screen; the browser tab is useless after.
-const GOOGLE_SIGN_IN_TIMEOUT = Duration.minutes(15);
+// Long enough to read a consent screen; the browser tab is useless after.
+const SIGN_IN_TIMEOUT = Duration.minutes(15);
 
 const ToolRecord = Schema.Struct({ ...ConnectorTool.fields, inputSchema: Schema.Unknown });
 
@@ -85,19 +97,26 @@ const storageFailure =
       Effect.andThen(Effect.fail(connectorError("storage", message))),
     );
 
-const upstreamFailure = (name: string, cause: unknown, kind: ConnectorSource["_tag"] = "mcp") => {
+/** How a connector proves who it is, which decides what a refusal tells the user to do. */
+type SignInKind = "google" | "oauth" | "key";
+
+const signInKind = (source: ConnectorSource): SignInKind =>
+  source._tag === "google" ? "google" : source.auth._tag === "oauth" ? "oauth" : "key";
+
+const REFUSED: Record<SignInKind, (name: string) => string> = {
+  google: (name) => `${name} lost access to Google. Reconnect it in Settings → Connectors.`,
+  oauth: (name) => `${name} signed T4 out. Sign in again in Settings → Connectors.`,
+  key: (name) => `${name} refused T4's credentials. Check the header in Settings → Connectors.`,
+};
+
+const upstreamFailure = (name: string, cause: unknown, kind: SignInKind = "key") => {
   const status = httpStatus(cause);
   if (
     status === 401 ||
     status === 403 ||
     (cause instanceof Error && cause.name === "GoogleAuthError")
   ) {
-    return connectorError(
-      "auth_failed",
-      kind === "google"
-        ? `${name} lost access to Google. Reconnect it in Settings → Connectors.`
-        : `${name} refused T4's credentials. Check the header in Settings → Connectors.`,
-    );
+    return connectorError("auth_failed", REFUSED[kind](name));
   }
   if (cause instanceof TypeError || status === 404 || (status !== undefined && status >= 500)) {
     return connectorError(
@@ -145,11 +164,15 @@ export class Connectors extends Context.Service<
     ) => Effect.Effect<UpstreamCallResult, ConnectorError>;
     readonly googleSignInStart: (
       httpBaseUrl: string,
-    ) => Effect.Effect<ConnectorGoogleSignIn, ConnectorError>;
-    /** Resolves when the browser finishes on Google, or fails when it gives up or expires. */
-    readonly googleSignInWait: (state: string) => Effect.Effect<Connector, ConnectorError>;
-    /** What the server's callback route runs with Google's reply. */
-    readonly googleSignInFinish: (input: {
+    ) => Effect.Effect<ConnectorSignIn, ConnectorError>;
+    /** Finds the MCP server's own sign-in page. The connector is saved once the browser returns. */
+    readonly oauthSignInStart: (
+      input: ConnectorOAuthSignInStartInput,
+    ) => Effect.Effect<ConnectorSignIn, ConnectorError>;
+    /** Resolves when the browser finishes signing in, or fails when it gives up or expires. */
+    readonly signInWait: (state: string) => Effect.Effect<Connector, ConnectorError>;
+    /** What the server's callback routes run with the service's reply. */
+    readonly signInFinish: (input: {
       readonly state: string;
       readonly code: string | undefined;
       readonly error: string | undefined;
@@ -157,20 +180,25 @@ export class Connectors extends Context.Service<
   }
 >()("t3/connectors/Connectors") {}
 
-interface PendingGoogleSignIn {
-  readonly codeVerifier: string;
+interface PendingSignIn {
+  /** Named in what the user reads: Google, or the connector being added. */
+  readonly service: string;
+  /** Trades the code the browser came back with for a saved connector. */
+  readonly complete: (code: string) => Effect.Effect<Connector, ConnectorError>;
   readonly deferred: Deferred.Deferred<Connector, ConnectorError>;
-  /** Google's reply came back; the code is spent. */
+  /** The service's reply came back; the code is spent. */
   readonly claimed: boolean;
 }
 
 export interface ConnectorsOptions {
   readonly open: OpenConnectorClient;
   readonly google: GoogleBroker;
+  /** Reaches a service's sign-in endpoints. */
+  readonly oauthFetch: OAuthFetch;
 }
 
 const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions) {
-  const { open, google } = options;
+  const { open, google, oauthFetch } = options;
   const fileSystem = yield* FileSystem.FileSystem;
   const path = yield* Path.Path;
   const crypto = yield* Crypto.Crypto;
@@ -180,8 +208,10 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
   const connectorsPath = path.join(config.stateDir, CONNECTORS_FILE);
   const recordsLock = yield* Semaphore.make(1);
   const clients = yield* Ref.make<ReadonlyMap<ConnectorId, ConnectorClient>>(new Map());
-  const pendingGoogle = yield* Ref.make<ReadonlyMap<string, PendingGoogleSignIn>>(new Map());
+  const pendingSignIns = yield* Ref.make<ReadonlyMap<string, PendingSignIn>>(new Map());
   const scope = yield* Effect.scope;
+  // The MCP SDK saves refreshed tokens from a promise callback.
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
   const randomHex = (bytes: number) =>
     crypto.randomBytes(bytes).pipe(Effect.orDie, Effect.map(Hex.encode));
@@ -247,6 +277,14 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
       result: undefined,
     }));
 
+  const putRecord = (record: ConnectorRecord) =>
+    updateRecords((connectors) => ({
+      connectors: connectors.some((candidate) => candidate.id === record.id)
+        ? connectors.map((candidate) => (candidate.id === record.id ? record : candidate))
+        : [...connectors, record],
+      result: undefined,
+    }));
+
   const findRecord = Effect.fn("Connectors.findRecord")(function* (id: ConnectorId) {
     const record = (yield* readRecords()).find((candidate) => candidate.id === id);
     if (record === undefined) {
@@ -275,6 +313,19 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
     return value.value;
   });
 
+  const saveOAuthCredentials = (id: ConnectorId, credentials: OAuthCredentials) =>
+    secrets
+      .set(secretName(id), new TextEncoder().encode(encodeOAuthCredentials(credentials)))
+      .pipe(Effect.catch(storageFailure("Could not save the connector's sign-in.")));
+
+  /** Signs a saved connector's requests, keeping the tokens the service rotates. */
+  const savedOAuthProvider = (id: ConnectorId, credentials: OAuthCredentials) =>
+    oauthSession({
+      credentials,
+      // Unsaved tokens still work until a restart, so a failed write must not fail the call.
+      onTokens: (next) => runPromise(saveOAuthCredentials(id, next).pipe(Effect.ignore)),
+    }).provider;
+
   const connect = (name: string, target: ConnectorTarget) =>
     Effect.tryPromise({
       try: async () => {
@@ -286,7 +337,8 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
           throw error;
         }
       },
-      catch: (cause) => upstreamFailure(name, cause),
+      catch: (cause) =>
+        upstreamFailure(name, cause, target.authProvider === undefined ? "key" : "oauth"),
     });
 
   /** A client for a saved connector. Google's tools are built in, so opening it is free. */
@@ -298,6 +350,17 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
         broker: google,
       });
       return { client, tools: GOOGLE_TOOLS };
+    }
+    if (source.auth._tag === "oauth") {
+      const credentials = decodeOAuthCredentials(yield* requiredSecret(record));
+      if (credentials === undefined) {
+        return yield* connectorError("auth_failed", REFUSED.oauth(record.name));
+      }
+      return yield* connect(record.name, {
+        url: source.url,
+        headers: {},
+        authProvider: savedOAuthProvider(record.id, credentials),
+      });
     }
     const headers =
       source.auth._tag === "header" ? { [source.auth.name]: yield* requiredSecret(record) } : {};
@@ -365,7 +428,10 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
       headerValue =
         input.auth.value === undefined
           ? Option.getOrUndefined(
-              existing === undefined ? Option.none() : yield* readSecret(existing.id),
+              // A browser sign-in's saved tokens are not a header value.
+              existing?.source._tag === "mcp" && existing.source.auth._tag === "header"
+                ? yield* readSecret(existing.id)
+                : Option.none(),
             )
           : Redacted.value(input.auth.value);
       if (headerValue === undefined) {
@@ -397,13 +463,7 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
           .set(secretName(id), new TextEncoder().encode(headerValue))
           .pipe(Effect.catch(storageFailure("Could not save the connector's credentials.")));
       }
-      yield* updateRecords((connectors) => ({
-        connectors:
-          existing === undefined
-            ? [...connectors, record]
-            : connectors.map((candidate) => (candidate.id === id ? record : candidate)),
-        result: undefined,
-      }));
+      yield* putRecord(record);
     }).pipe(Effect.onError(() => closeClient(client)));
     yield* pool(id, client);
     return toConnector(record);
@@ -476,7 +536,7 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
         Effect.flatMap((client) =>
           Effect.tryPromise({
             try: () => client.callTool(name, args),
-            catch: (cause) => upstreamFailure(record.name, cause, record.source._tag),
+            catch: (cause) => upstreamFailure(record.name, cause, signInKind(record.source)),
           }).pipe(
             // A failed session is not reused; the next call opens a fresh one. Never retried here: it may have written.
             Effect.tapError(() =>
@@ -493,7 +553,7 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
   });
 
   const dropPending = (state: string) =>
-    Ref.modify(pendingGoogle, (current) => {
+    Ref.modify(pendingSignIns, (current) => {
       const pending = current.get(state);
       if (pending === undefined) return [undefined, current] as const;
       const next = new Map(current);
@@ -503,60 +563,49 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
 
   // A finished sign-in stays until it expires, so a wait that arrives late still sees its result.
   const claimPending = (state: string) =>
-    Ref.modify(pendingGoogle, (current) => {
+    Ref.modify(pendingSignIns, (current) => {
       const pending = current.get(state);
       if (pending === undefined || pending.claimed) return [undefined, current] as const;
       return [pending, new Map(current).set(state, { ...pending, claimed: true })] as const;
     });
 
-  const googleSignInStart = Effect.fn("Connectors.googleSignInStart")(function* (
-    httpBaseUrl: string,
+  /** Holds a sign-in open under its unguessable state until the browser returns or it expires. */
+  const awaitBrowser = Effect.fn("Connectors.awaitBrowser")(function* (
+    state: string,
+    service: string,
+    complete: PendingSignIn["complete"],
   ) {
-    const nonce = yield* randomHex(16);
-    const codeVerifier = yield* randomHex(32);
-    const state = encodeState({ returnUrl: callbackUrl(httpBaseUrl), nonce });
-    const codeChallenge = yield* Effect.promise(() => pkceChallenge(codeVerifier));
     const deferred = yield* Deferred.make<Connector, ConnectorError>();
-    yield* Ref.update(pendingGoogle, (current) =>
-      new Map(current).set(state, { codeVerifier, deferred, claimed: false }),
+    yield* Ref.update(pendingSignIns, (current) =>
+      new Map(current).set(state, { service, complete, deferred, claimed: false }),
     );
-    yield* Effect.sleep(GOOGLE_SIGN_IN_TIMEOUT).pipe(
+    yield* Effect.sleep(SIGN_IN_TIMEOUT).pipe(
       Effect.andThen(dropPending(state)),
       Effect.flatMap((pending) =>
         pending === undefined
           ? Effect.void
           : Deferred.fail(
               pending.deferred,
-              connectorError("sign_in_expired", "The Google sign-in expired. Start again."),
+              connectorError("sign_in_expired", `The ${service} sign-in expired. Start again.`),
             ),
       ),
       Effect.forkIn(scope),
     );
-    return { authUrl: authorizationUrl({ brokerUrl: google.url, state, codeChallenge }), state };
   });
 
-  const googleSignInWait = Effect.fn("Connectors.googleSignInWait")(function* (state: string) {
-    const pending = (yield* Ref.get(pendingGoogle)).get(state);
-    if (pending === undefined) {
-      return yield* connectorError(
-        "sign_in_expired",
-        "No Google sign-in is in progress. Start again.",
-      );
-    }
-    return yield* Deferred.await(pending.deferred);
-  });
+  const signInFailed = (service: string) => (cause: unknown) =>
+    connectorError(
+      "sign_in_failed",
+      `${service} sign-in failed: ${cause instanceof Error ? cause.message : String(cause)}`,
+    );
 
   const completeGoogle = Effect.fn("Connectors.completeGoogle")(function* (
-    pending: PendingGoogleSignIn,
+    codeVerifier: string,
     code: string,
   ) {
-    const failed = (cause: unknown) =>
-      connectorError(
-        "sign_in_failed",
-        `Google sign-in failed: ${cause instanceof Error ? cause.message : String(cause)}`,
-      );
+    const failed = signInFailed("Google");
     const tokens = yield* Effect.tryPromise({
-      try: () => exchangeCode(google, { code, codeVerifier: pending.codeVerifier }),
+      try: () => exchangeCode(google, { code, codeVerifier }),
       catch: failed,
     });
     const refreshToken = tokens.refreshToken;
@@ -585,18 +634,101 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
     yield* secrets
       .set(secretName(id), new TextEncoder().encode(refreshToken))
       .pipe(Effect.catch(storageFailure("Could not save the Google account's credentials.")));
-    yield* updateRecords((connectors) => ({
-      connectors:
-        existing === undefined
-          ? [...connectors, record]
-          : connectors.map((candidate) => (candidate.id === id ? record : candidate)),
-      result: undefined,
-    }));
+    yield* putRecord(record);
     yield* pool(id, makeGoogleClient({ refreshToken, broker: google }));
     return toConnector(record);
   });
 
-  const googleSignInFinish = Effect.fn("Connectors.googleSignInFinish")(function* (input: {
+  const googleSignInStart = Effect.fn("Connectors.googleSignInStart")(function* (
+    httpBaseUrl: string,
+  ) {
+    const nonce = yield* randomHex(16);
+    const codeVerifier = yield* randomHex(32);
+    const state = encodeState({ returnUrl: callbackUrl(httpBaseUrl), nonce });
+    const codeChallenge = yield* Effect.promise(() => pkceChallenge(codeVerifier));
+    yield* awaitBrowser(state, "Google", (code) => completeGoogle(codeVerifier, code));
+    return { authUrl: authorizationUrl({ brokerUrl: google.url, state, codeChallenge }), state };
+  });
+
+  const oauthSignInStart = Effect.fn("Connectors.oauthSignInStart")(function* (
+    input: ConnectorOAuthSignInStartInput,
+  ) {
+    const existing =
+      input.connectorId === undefined ? undefined : yield* findRecord(input.connectorId);
+    const state = yield* randomHex(16);
+    const signIn = oauthSession({
+      credentials: {
+        redirectUrl: oauthCallbackUrl(input.httpBaseUrl),
+        client: undefined,
+        tokens: undefined,
+      },
+      state,
+    });
+    const authUrl = yield* Effect.tryPromise({
+      try: () => beginOAuthSignIn(signIn, input.url, oauthFetch),
+      catch: (cause) => ({ cause, unreachable: cause instanceof TypeError }),
+    }).pipe(
+      Effect.catch(({ cause, unreachable }) =>
+        unreachable
+          ? Effect.fail(
+              connectorError("unreachable", `Could not reach ${input.name}'s MCP server.`),
+            )
+          : // The cause is often the service's whole error page, so it goes to the log.
+            Effect.logWarning("Connector offers no usable browser sign-in", {
+              url: input.url,
+              cause,
+            }).pipe(
+              Effect.andThen(
+                Effect.fail(
+                  connectorError(
+                    "sign_in_failed",
+                    `${input.name} has no browser sign-in T4 can use. If it gives you an API key, use that.`,
+                  ),
+                ),
+              ),
+            ),
+      ),
+    );
+    const complete = Effect.fn("Connectors.completeOAuth")(function* (code: string) {
+      yield* Effect.tryPromise({
+        try: () => completeOAuthSignIn(signIn, input.url, code, oauthFetch),
+        catch: signInFailed(input.name),
+      });
+      const id = existing?.id ?? ConnectorId.make(`${slug(input.name)}-${yield* randomHex(2)}`);
+      const credentials = signIn.credentials();
+      const { client, tools } = yield* connect(input.name, {
+        url: input.url,
+        headers: {},
+        authProvider: savedOAuthProvider(id, credentials),
+      });
+      const record: ConnectorRecord = {
+        id,
+        name: input.name,
+        source: { _tag: "mcp", url: input.url, auth: { _tag: "oauth" } },
+        createdAt: existing?.createdAt ?? (yield* DateTime.now),
+        tools: toolRecords(tools),
+        lastError: null,
+      };
+      yield* saveOAuthCredentials(id, credentials).pipe(
+        Effect.andThen(putRecord(record)),
+        Effect.onError(() => closeClient(client)),
+      );
+      yield* pool(id, client);
+      return toConnector(record);
+    });
+    yield* awaitBrowser(state, input.name, complete);
+    return { authUrl: authUrl.href, state };
+  });
+
+  const signInWait = Effect.fn("Connectors.signInWait")(function* (state: string) {
+    const pending = (yield* Ref.get(pendingSignIns)).get(state);
+    if (pending === undefined) {
+      return yield* connectorError("sign_in_expired", "No sign-in is in progress. Start again.");
+    }
+    return yield* Deferred.await(pending.deferred);
+  });
+
+  const signInFinish = Effect.fn("Connectors.signInFinish")(function* (input: {
     readonly state: string;
     readonly code: string | undefined;
     readonly error: string | undefined;
@@ -605,7 +737,7 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
     if (pending === undefined) {
       return yield* connectorError(
         "sign_in_expired",
-        "This Google sign-in already finished or expired. Start again from T4.",
+        "This sign-in already finished or expired. Start again from T4.",
       );
     }
     const result =
@@ -614,11 +746,11 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
             connectorError(
               "sign_in_failed",
               input.error === "access_denied"
-                ? "Google sign-in was cancelled."
-                : `Google sign-in failed: ${input.error ?? "no code came back"}.`,
+                ? `${pending.service} sign-in was cancelled.`
+                : `${pending.service} sign-in failed: ${input.error ?? "no code came back"}.`,
             ),
           )
-        : completeGoogle(pending, input.code);
+        : pending.complete(input.code);
     const exit = yield* Effect.exit(result);
     yield* Deferred.done(pending.deferred, exit);
     return yield* exit;
@@ -632,8 +764,9 @@ const make = Effect.fn("Connectors.make")(function* (options: ConnectorsOptions)
     describeTool,
     callTool,
     googleSignInStart,
-    googleSignInWait,
-    googleSignInFinish,
+    oauthSignInStart,
+    signInWait,
+    signInFinish,
   });
 });
 
@@ -650,4 +783,5 @@ export const layerWith = (options: ConnectorsOptions) => Layer.effect(Connectors
 export const layer = layerWith({
   open: openHttpClient,
   google: defaultGoogleBroker(),
+  oauthFetch: defaultOAuthFetch,
 });
