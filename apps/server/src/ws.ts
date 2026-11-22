@@ -2608,7 +2608,8 @@ export const layerWsRpc = (
         [WS_METHODS.connectorsRefresh]: ({ connectorId }) => connectors.refresh(connectorId),
         [WS_METHODS.connectorsGoogleSignInStart]: ({ httpBaseUrl }) =>
           connectors.googleSignInStart(httpBaseUrl),
-        [WS_METHODS.connectorsGoogleSignInWait]: ({ state }) => connectors.googleSignInWait(state),
+        [WS_METHODS.connectorsOAuthSignInStart]: (input) => connectors.oauthSignInStart(input),
+        [WS_METHODS.connectorsSignInWait]: ({ state }) => connectors.signInWait(state),
         [WS_METHODS.companyBrainListCollections]: ({ projectId }) =>
           companyBrain.listCollections(projectId),
         [WS_METHODS.companyBrainListRecords]: (input) => companyBrain.listRecords(input),

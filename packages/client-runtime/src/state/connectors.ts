@@ -42,10 +42,14 @@ export function createConnectorEnvironmentAtoms<R, E>(
       label: "environment-data:connectors:google-sign-in-start",
       tag: WS_METHODS.connectorsGoogleSignInStart,
     }),
+    startOAuthSignIn: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:connectors:oauth-sign-in-start",
+      tag: WS_METHODS.connectorsOAuthSignInStart,
+    }),
     // Waits on the user in another tab; the connector appears once it resolves.
-    waitForGoogleSignIn: createEnvironmentRpcCommand(runtime, {
-      label: "environment-data:connectors:google-sign-in-wait",
-      tag: WS_METHODS.connectorsGoogleSignInWait,
+    waitForSignIn: createEnvironmentRpcCommand(runtime, {
+      label: "environment-data:connectors:sign-in-wait",
+      tag: WS_METHODS.connectorsSignInWait,
       onSuccess: refreshList,
     }),
   };

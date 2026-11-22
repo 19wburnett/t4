@@ -49,13 +49,14 @@ import {
 import {
   Connector,
   ConnectorError,
-  ConnectorGoogleSignIn,
   ConnectorGoogleSignInStartInput,
-  ConnectorGoogleSignInWaitInput,
   ConnectorInput,
   ConnectorList,
+  ConnectorOAuthSignInStartInput,
   ConnectorRemoveResult,
   ConnectorSaveInput,
+  ConnectorSignIn,
+  ConnectorSignInWaitInput,
 } from "./connectors.ts";
 import {
   CompanyBrainCollection,
@@ -584,7 +585,8 @@ export const WS_METHODS = {
   connectorsRemove: "connectors.remove",
   connectorsRefresh: "connectors.refresh",
   connectorsGoogleSignInStart: "connectors.googleSignInStart",
-  connectorsGoogleSignInWait: "connectors.googleSignInWait",
+  connectorsOAuthSignInStart: "connectors.oauthSignInStart",
+  connectorsSignInWait: "connectors.signInWait",
   companyBrainListCollections: "companyBrain.listCollections",
   companyBrainListRecords: "companyBrain.listRecords",
   companyBrainReadRecord: "companyBrain.readRecord",
@@ -1023,13 +1025,19 @@ const WsConnectorsRefreshRpc = Rpc.make(WS_METHODS.connectorsRefresh, {
 
 const WsConnectorsGoogleSignInStartRpc = Rpc.make(WS_METHODS.connectorsGoogleSignInStart, {
   payload: ConnectorGoogleSignInStartInput,
-  success: ConnectorGoogleSignIn,
+  success: ConnectorSignIn,
   error: connectorErrors,
 });
 
-// Resolves with the saved connector once the browser finishes on Google, however long that takes.
-const WsConnectorsGoogleSignInWaitRpc = Rpc.make(WS_METHODS.connectorsGoogleSignInWait, {
-  payload: ConnectorGoogleSignInWaitInput,
+const WsConnectorsOAuthSignInStartRpc = Rpc.make(WS_METHODS.connectorsOAuthSignInStart, {
+  payload: ConnectorOAuthSignInStartInput,
+  success: ConnectorSignIn,
+  error: connectorErrors,
+});
+
+// Resolves with the saved connector once the browser finishes signing in, however long that takes.
+const WsConnectorsSignInWaitRpc = Rpc.make(WS_METHODS.connectorsSignInWait, {
+  payload: ConnectorSignInWaitInput,
   success: Connector,
   error: connectorErrors,
 });
@@ -2336,7 +2344,8 @@ export const WsRpcGroup = RpcGroup.make(
   WsConnectorsRemoveRpc,
   WsConnectorsRefreshRpc,
   WsConnectorsGoogleSignInStartRpc,
-  WsConnectorsGoogleSignInWaitRpc,
+  WsConnectorsOAuthSignInStartRpc,
+  WsConnectorsSignInWaitRpc,
   WsCompanyBrainListCollectionsRpc,
   WsCompanyBrainListRecordsRpc,
   WsCompanyBrainReadRecordRpc,

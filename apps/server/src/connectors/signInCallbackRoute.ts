@@ -3,6 +3,7 @@ import * as Layer from "effect/Layer";
 import * as Option from "effect/Option";
 import { HttpRouter, HttpServerRequest, HttpServerResponse } from "effect/http";
 
+import { OAUTH_CALLBACK_PATH } from "./connectorOAuth.ts";
 import * as Connectors from "./Connectors.ts";
 import { GOOGLE_CALLBACK_PATH } from "./google/googleOAuth.ts";
 
@@ -19,26 +20,30 @@ const page = (title: string, message: string, status: number) =>
   );
 
 /**
- * Google's reply, forwarded by the hosted site. No session: the unguessable,
- * single-use state is what ties it to the sign-in this server started.
+ * Where a browser sign-in comes back: Google's reply, forwarded by the hosted site, or an MCP
+ * server's own. No session: the unguessable, single-use state is what ties it to the sign-in
+ * this server started.
  */
 export const layer = Layer.unwrap(
   Effect.gen(function* () {
     const connectors = yield* Connectors.Connectors;
-    return HttpRouter.add("GET", GOOGLE_CALLBACK_PATH, callback(connectors));
+    return Layer.mergeAll(
+      HttpRouter.add("GET", GOOGLE_CALLBACK_PATH, callback(connectors)),
+      HttpRouter.add("GET", OAUTH_CALLBACK_PATH, callback(connectors)),
+    );
   }),
 );
 
-const callback = Effect.fn("GoogleCallbackRoute.callback")(function* (
+const callback = Effect.fn("SignInCallbackRoute.callback")(function* (
   connectors: Connectors.Connectors["Service"],
 ) {
   const request = yield* HttpServerRequest.HttpServerRequest;
   const url = HttpServerRequest.toURL(request);
   const params = Option.isSome(url) ? url.value.searchParams : new URLSearchParams();
   const state = params.get("state");
-  if (state === null) return page("Google sign-in failed", "The sign-in link is incomplete.", 400);
+  if (state === null) return page("Sign-in failed", "The sign-in link is incomplete.", 400);
   return yield* connectors
-    .googleSignInFinish({
+    .signInFinish({
       state,
       code: params.get("code") ?? undefined,
       error: params.get("error") ?? undefined,
@@ -47,11 +52,11 @@ const callback = Effect.fn("GoogleCallbackRoute.callback")(function* (
       Effect.match({
         onSuccess: (connector) =>
           page(
-            "Google connected",
+            "Connected",
             `${connector.name} is ready for your agents. You can close this tab.`,
             200,
           ),
-        onFailure: (error) => page("Google sign-in failed", error.message, 400),
+        onFailure: (error) => page("Sign-in failed", error.message, 400),
       }),
     );
 });
