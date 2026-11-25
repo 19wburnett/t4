@@ -5,9 +5,10 @@ import {
   ChartNoAxesColumnIcon,
   InboxIcon,
   SettingsIcon,
+  MessagesSquareIcon,
 } from "lucide-react";
 import type { ReactNode } from "react";
-import { memo } from "react";
+import { memo, useState } from "react";
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 
 import { useAtomValue } from "@effect/atom-react";
@@ -27,6 +28,7 @@ import {
   SidebarStageBackdrop,
   useEnvironmentStageLabel,
 } from "../SidebarStageBackdrop";
+import { MuseDialog } from "../muse/MuseDialog";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import {
@@ -226,6 +228,7 @@ function SidebarUtilityItem({
 const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
   const navigate = useNavigate();
   const navigateToMainApp = useNavigateToMainApp();
+  const [museOpen, setMuseOpen] = useState(false);
   const { isMobile, setOpenMobile } = useSidebar();
   const isOnUtilityPage = useLocation({
     select: (location) => isSidebarUtilityPage(location.pathname),
@@ -288,6 +291,11 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
       ) : (
         <>
           <SidebarUtilityItem
+            icon={<MessagesSquareIcon />}
+            label="Muse"
+            onClick={() => setMuseOpen(true)}
+          />
+          <SidebarUtilityItem
             icon={<SettingsIcon />}
             label="Settings"
             onClick={handleSettingsClick}
@@ -316,6 +324,7 @@ const SidebarUtilityMenu = memo(function SidebarUtilityMenu() {
           />
         </>
       )}
+      {museOpen && <MuseDialog onClose={() => setMuseOpen(false)} />}
       <SidebarThreadUndoNotice />
       <SidebarUpdatePill />
     </SidebarMenu>

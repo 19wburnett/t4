@@ -44,3 +44,16 @@ Agents act as your connected account, including tools that change things, such
 as creating an issue. In supervised threads your provider asks before each
 call. In full-access threads it doesn't, so connect only what you trust those
 agents to use.
+
+## Muse personal agent
+
+Open **Muse** from the web or desktop sidebar, or from **Settings → Muse**
+on mobile. Choose **New Thread** and give it a title to start a separate Muse
+conversation on that environment. The Muse worker picks up queued messages
+asynchronously. T4 shows its progress and opens Muse for approvals when the
+worker includes an approval link.
+
+To connect the worker, open **Settings → Connectors → Muse bridge** on web or
+desktop. On mobile, the token controls are on **Settings → Muse**. Choose
+**Generate** and copy the token when it appears. **Regenerate** replaces the
+worker's token. **Revoke** removes its access.

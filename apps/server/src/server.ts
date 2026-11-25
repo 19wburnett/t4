@@ -81,6 +81,8 @@ import * as CompanyChannels from "./companyChannels/CompanyChannels.ts";
 import * as Connectors from "./connectors/Connectors.ts";
 import * as SignInCallbackRoute from "./connectors/signInCallbackRoute.ts";
 import * as MailTransport from "./companyChannels/MailTransport.ts";
+import * as MuseBridge from "./muse/MuseBridge.ts";
+import * as MuseRoutes from "./muse/museRoutes.ts";
 import * as PeerMcpClient from "./peer/PeerMcpClient.ts";
 import * as McpSessionRegistry from "./mcp/McpSessionRegistry.ts";
 import * as PreviewAutomationBroker from "./mcp/PreviewAutomationBroker.ts";
@@ -743,6 +745,7 @@ const layerMakeRoutes = Layer.mergeAll(
     ServerHttp.layerOtlpTracesProxyRoute,
     ServerHttp.layerAssetRoute,
     SignInCallbackRoute.layer,
+    MuseRoutes.layer,
     ServerHttp.layerAttachmentUploadRoute,
     GuestHttp.layer,
     DeviceHubProxy.layer,
@@ -786,6 +789,8 @@ const layerMakeRoutes = Layer.mergeAll(
   Layer.provide(CompanyChannels.layer.pipe(Layer.provide(MailTransport.layer))),
   // Connected MCP servers, shared by Settings (WebSocket) and agents (/mcp).
   Layer.provide(Connectors.layer),
+  // The Muse queue, shared by its thread (WebSocket) and Muse itself (/api/muse).
+  Layer.provide(MuseBridge.layer),
   // Company records, shared by the Company hub (WebSocket) and agents (/mcp).
   Layer.provide(CompanyBrain.layer),
   Layer.provide(CompanyBrainSource.layer),

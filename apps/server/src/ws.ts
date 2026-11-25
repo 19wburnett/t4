@@ -8,6 +8,7 @@ import * as CompanyBrain from "./companyBrain/CompanyBrain.ts";
 import * as CompanyBrainSource from "./companyBrain/CompanyBrainSource.ts";
 import * as CompanyChannels from "./companyChannels/CompanyChannels.ts";
 import * as Connectors from "./connectors/Connectors.ts";
+import * as MuseBridge from "./muse/MuseBridge.ts";
 
 import * as DateTime from "effect/DateTime";
 import * as Duration from "effect/Duration";
@@ -105,6 +106,7 @@ import {
   AuthAccessWriteScope,
   companyFieldsOf,
   companyMemberIdFromSubject,
+  MuseBridgeError,
 } from "@t3tools/contracts";
 import {
   HttpRouter,
@@ -280,6 +282,8 @@ import * as UsageLimitSources from "./usage/UsageLimitSources.ts";
 
 const CONFIG_DISCOVERY_TIMEOUT = Duration.seconds(5);
 const isProviderUploadFeedbackError = Schema.is(ProviderUploadFeedbackError);
+const toMuseBridgeError = (error: MuseBridge.MuseQueueError) =>
+  new MuseBridgeError({ message: error.message });
 
 const resolveDiscoveryForConfig = <A, E, R>(
   discovery: Effect.Effect<A, E, R>,
@@ -1380,6 +1384,7 @@ export const layerWsRpc = (
       const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
       const companyChannels = yield* CompanyChannels.CompanyChannels;
       const connectors = yield* Connectors.Connectors;
+      const museBridge = yield* MuseBridge.MuseBridge;
       const companyBrain = yield* CompanyBrain.CompanyBrain;
       const companyBrainSource = yield* CompanyBrainSource.CompanyBrainSource;
       const startup = yield* ServerRuntimeStartup.ServerRuntimeStartup;
@@ -2610,6 +2615,19 @@ export const layerWsRpc = (
           connectors.googleSignInStart(httpBaseUrl),
         [WS_METHODS.connectorsOAuthSignInStart]: (input) => connectors.oauthSignInStart(input),
         [WS_METHODS.connectorsSignInWait]: ({ state }) => connectors.signInWait(state),
+        [WS_METHODS.museList]: () => museBridge.list.pipe(Effect.mapError(toMuseBridgeError)),
+        [WS_METHODS.museCreateThread]: (input) =>
+          museBridge.createThread(input).pipe(Effect.mapError(toMuseBridgeError)),
+        [WS_METHODS.museThread]: ({ threadId }) =>
+          museBridge.thread(threadId).pipe(Effect.mapError(toMuseBridgeError)),
+        [WS_METHODS.museSend]: (input) =>
+          museBridge.send(input).pipe(Effect.mapError(toMuseBridgeError)),
+        [WS_METHODS.museBridgeTokenStatus]: () =>
+          museBridge.tokenStatus.pipe(Effect.mapError(toMuseBridgeError)),
+        [WS_METHODS.museBridgeTokenIssue]: () =>
+          museBridge.issueToken.pipe(Effect.mapError(toMuseBridgeError)),
+        [WS_METHODS.museBridgeTokenRevoke]: () =>
+          museBridge.revokeToken.pipe(Effect.mapError(toMuseBridgeError)),
         [WS_METHODS.companyBrainListCollections]: ({ projectId }) =>
           companyBrain.listCollections(projectId),
         [WS_METHODS.companyBrainListRecords]: (input) => companyBrain.listRecords(input),
@@ -3414,6 +3432,7 @@ export const layer = Layer.unwrap(
     const peerLinkRequests = yield* PeerLinkRequests.PeerLinkRequests;
     const companyChannels = yield* CompanyChannels.CompanyChannels;
     const connectors = yield* Connectors.Connectors;
+    const museBridge = yield* MuseBridge.MuseBridge;
     const companyBrain = yield* CompanyBrain.CompanyBrain;
     const companyBrainSource = yield* CompanyBrainSource.CompanyBrainSource;
     const sql = yield* SqlClient.SqlClient;
@@ -3501,6 +3520,7 @@ export const layer = Layer.unwrap(
               Layer.provide(Layer.succeed(PeerLinkRequests.PeerLinkRequests, peerLinkRequests)),
               Layer.provide(Layer.succeed(CompanyChannels.CompanyChannels, companyChannels)),
               Layer.provide(Layer.succeed(Connectors.Connectors, connectors)),
+              Layer.provide(Layer.succeed(MuseBridge.MuseBridge, museBridge)),
               Layer.provide(Layer.succeed(CompanyBrain.CompanyBrain, companyBrain)),
               Layer.provide(
                 Layer.succeed(CompanyBrainSource.CompanyBrainSource, companyBrainSource),

@@ -61,6 +61,7 @@ import * as PeerLinks from "./peer/PeerLinks.ts";
 import * as CompanyBrain from "./companyBrain/CompanyBrain.ts";
 import * as CompanyBrainSource from "./companyBrain/CompanyBrainSource.ts";
 import * as CompanyChannels from "./companyChannels/CompanyChannels.ts";
+import * as MuseBridge from "./muse/MuseBridge.ts";
 import * as Connectors from "./connectors/Connectors.ts";
 import * as PortScanner from "./preview/PortScanner.ts";
 import * as PreviewManager from "./preview/Manager.ts";
@@ -515,6 +516,7 @@ const layerUnusedConfigRpcServices = Layer.mergeAll(
   Layer.mock(PeerLinkRequests.PeerLinkRequests)({}),
   Layer.mock(CompanyChannels.CompanyChannels)({}),
   Layer.mock(Connectors.Connectors)({}),
+  Layer.mock(MuseBridge.MuseBridge)({}),
   Layer.mock(CompanyBrain.CompanyBrain)({}),
   Layer.mock(CompanyBrainSource.CompanyBrainSource)({}),
   Layer.mock(PortScanner.PortDiscovery)({ trackAgent: () => () => undefined }),

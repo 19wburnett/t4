@@ -27,6 +27,7 @@ import { Label } from "../ui/label";
 import { Select, SelectItem, SelectPopup, SelectTrigger, SelectValue } from "../ui/select";
 import { Spinner } from "../ui/spinner";
 import { toastManager } from "../ui/toast";
+import { MuseTokenSettings } from "../muse/MuseTokenSettings";
 import { SecretInput } from "./SecretInput";
 import { useSettingsScope } from "./SettingsScopeContext";
 import { searchableSetting } from "./settingsSearch";
@@ -73,6 +74,7 @@ function EnvironmentConnectors({ environmentId }: { readonly environmentId: Envi
 
   return (
     <>
+      <MuseTokenSettings environmentId={environmentId} />
       <SettingsSection
         {...searchableSetting("connectors")}
         headerAction={

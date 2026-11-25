@@ -100,6 +100,11 @@ export const CLIENT_GUARDED_RPC_SCOPES = {
   [WS_METHODS.connectorsGoogleSignInStart]: AuthSettingsWriteScope,
   [WS_METHODS.connectorsOAuthSignInStart]: AuthSettingsWriteScope,
   [WS_METHODS.connectorsSignInWait]: AuthSettingsWriteScope,
+  // Muse acts as its owner, so talking to it is as privileged as driving an agent.
+  [WS_METHODS.museCreateThread]: AuthOrchestrationOperateScope,
+  [WS_METHODS.museSend]: AuthOrchestrationOperateScope,
+  [WS_METHODS.museBridgeTokenIssue]: AuthSettingsWriteScope,
+  [WS_METHODS.museBridgeTokenRevoke]: AuthSettingsWriteScope,
 } as const;
 export type ClientGuardedRpcTag = keyof typeof CLIENT_GUARDED_RPC_SCOPES;
 

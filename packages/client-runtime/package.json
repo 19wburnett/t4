@@ -239,6 +239,10 @@
       "types": "./src/state/companyChannels.ts",
       "default": "./src/state/companyChannels.ts"
     },
+    "./state/muse": {
+      "types": "./src/state/muse.ts",
+      "default": "./src/state/muse.ts"
+    },
     "./state/connectors": {
       "types": "./src/state/connectors.ts",
       "default": "./src/state/connectors.ts"

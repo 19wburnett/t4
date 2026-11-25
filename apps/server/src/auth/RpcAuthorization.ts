@@ -93,6 +93,10 @@ export const RPC_REQUIRED_SCOPES = {
   [WS_METHODS.companyChannelsListOutbox]: AuthFilesystemReadScope,
   // Names which accounts this machine is signed in to, like the accounts list above.
   [WS_METHODS.connectorsList]: AuthFilesystemReadScope,
+  // Muse's replies can quote mail and files, so reading them needs the same scope.
+  [WS_METHODS.museList]: AuthFilesystemReadScope,
+  [WS_METHODS.museThread]: AuthFilesystemReadScope,
+  [WS_METHODS.museBridgeTokenStatus]: AuthSettingsWriteScope,
   // Records are files in the project folder.
   [WS_METHODS.companyBrainListCollections]: AuthFilesystemReadScope,
   [WS_METHODS.companyBrainListRecords]: AuthFilesystemReadScope,

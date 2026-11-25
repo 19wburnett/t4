@@ -45,6 +45,7 @@ export * from "./peerLink.ts";
 export * from "./companyBrain.ts";
 export * from "./companyChannels.ts";
 export * from "./connectors.ts";
+export * from "./muse.ts";
 export * from "./threadMetadataMcp.ts";
 export * from "./threadPullRequest.ts";
 export * from "./threadSearch.ts";

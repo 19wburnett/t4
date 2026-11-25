@@ -59,6 +59,18 @@ import {
   ConnectorSignInWaitInput,
 } from "./connectors.ts";
 import {
+  MuseBridgeError,
+  MuseBridgeTokenIssued,
+  MuseBridgeTokenStatus,
+  MuseMessage,
+  MuseSendInput,
+  MuseCreateThreadInput,
+  MuseThreadId,
+  MuseThreadList,
+  MuseThreadSummary,
+  MuseThread,
+} from "./muse.ts";
+import {
   CompanyBrainCollection,
   CompanyBrainCollectionInput,
   CompanyBrainCollectionList,
@@ -587,6 +599,13 @@ export const WS_METHODS = {
   connectorsGoogleSignInStart: "connectors.googleSignInStart",
   connectorsOAuthSignInStart: "connectors.oauthSignInStart",
   connectorsSignInWait: "connectors.signInWait",
+  museList: "muse.list",
+  museCreateThread: "muse.createThread",
+  museThread: "muse.thread",
+  museSend: "muse.send",
+  museBridgeTokenStatus: "muse.bridgeTokenStatus",
+  museBridgeTokenIssue: "muse.bridgeTokenIssue",
+  museBridgeTokenRevoke: "muse.bridgeTokenRevoke",
   companyBrainListCollections: "companyBrain.listCollections",
   companyBrainListRecords: "companyBrain.listRecords",
   companyBrainReadRecord: "companyBrain.readRecord",
@@ -1040,6 +1059,50 @@ const WsConnectorsSignInWaitRpc = Rpc.make(WS_METHODS.connectorsSignInWait, {
   payload: ConnectorSignInWaitInput,
   success: Connector,
   error: connectorErrors,
+});
+
+const museErrors = Schema.Union([MuseBridgeError, EnvironmentAuthorizationError]);
+
+const WsMuseListRpc = Rpc.make(WS_METHODS.museList, {
+  payload: Schema.Struct({}),
+  success: MuseThreadList,
+  error: museErrors,
+});
+const WsMuseCreateThreadRpc = Rpc.make(WS_METHODS.museCreateThread, {
+  payload: MuseCreateThreadInput,
+  success: MuseThreadSummary,
+  error: museErrors,
+});
+const WsMuseThreadRpc = Rpc.make(WS_METHODS.museThread, {
+  payload: MuseThreadId,
+  success: MuseThread,
+  error: museErrors,
+});
+
+// Queues a message for Muse; a repeated `clientRequestId` returns the message already queued.
+const WsMuseSendRpc = Rpc.make(WS_METHODS.museSend, {
+  payload: MuseSendInput,
+  success: MuseMessage,
+  error: museErrors,
+});
+
+const WsMuseBridgeTokenStatusRpc = Rpc.make(WS_METHODS.museBridgeTokenStatus, {
+  payload: Schema.Struct({}),
+  success: MuseBridgeTokenStatus,
+  error: museErrors,
+});
+
+// Replaces any previous token; the response is the only place the token is ever shown.
+const WsMuseBridgeTokenIssueRpc = Rpc.make(WS_METHODS.museBridgeTokenIssue, {
+  payload: Schema.Struct({}),
+  success: MuseBridgeTokenIssued,
+  error: museErrors,
+});
+
+const WsMuseBridgeTokenRevokeRpc = Rpc.make(WS_METHODS.museBridgeTokenRevoke, {
+  payload: Schema.Struct({}),
+  success: MuseBridgeTokenStatus,
+  error: museErrors,
 });
 
 const companyBrainErrors = Schema.Union([CompanyBrainError, EnvironmentAuthorizationError]);
@@ -2346,6 +2409,13 @@ export const WsRpcGroup = RpcGroup.make(
   WsConnectorsGoogleSignInStartRpc,
   WsConnectorsOAuthSignInStartRpc,
   WsConnectorsSignInWaitRpc,
+  WsMuseListRpc,
+  WsMuseCreateThreadRpc,
+  WsMuseThreadRpc,
+  WsMuseSendRpc,
+  WsMuseBridgeTokenStatusRpc,
+  WsMuseBridgeTokenIssueRpc,
+  WsMuseBridgeTokenRevokeRpc,
   WsCompanyBrainListCollectionsRpc,
   WsCompanyBrainListRecordsRpc,
   WsCompanyBrainReadRecordRpc,
